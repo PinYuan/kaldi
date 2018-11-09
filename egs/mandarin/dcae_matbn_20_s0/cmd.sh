@@ -1,0 +1,1 @@
+/mnt/md1/user_pthuang508/kaldi/egs/wsj/s5/cmd.sh

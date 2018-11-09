@@ -78,6 +78,12 @@ GSYMS
 /egs/*/s*/exp
 /egs/*/s*/data
 
+/egs/*/*/data
+/egs/*/*/dict
+/egs/*/*/exp
+/egs/*/*/feats
+/egs/*/*/lang
+
 # /tools/
 /tools/pocolm/
 /tools/ATLAS/
@@ -109,6 +115,7 @@ GSYMS
 /tools/libsndfile-1.0.25/
 /tools/pa_stable_v19_20111121.tgz
 /tools/portaudio/
+/tools/python/
 /tools/sctk-2.4.0-20091110-0958.tar.bz2
 /tools/sctk-2.4.0/
 /tools/sctk-2.4.10-20151007-1312Z.tar.bz2
