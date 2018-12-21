@@ -184,6 +184,7 @@ def write_config_files(config_dir, all_layers):
     for layer in all_layers:
         try:
             pairs = layer.get_full_config()
+            # print(pairs)
             for config_basename, line in pairs:
                 config_basename_to_lines[config_basename].append(line)
         except Exception as e:

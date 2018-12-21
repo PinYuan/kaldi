@@ -1007,6 +1007,8 @@ class XconfigFixedAffineLayer(XconfigLayerBase):
                 # layer.  This will be used to accumulate stats to learn the LDA transform.
                 line = 'output-node name=output input={0}'.format(descriptor_final_string)
                 ans.append(('init', line))
+                line = 'output-node name=output_ae input={0}'.format(descriptor_final_string)
+                ans.append(('init', line))
 
         # write the 'real' component to final.config
         line = 'component name={0} type=FixedAffineComponent matrix={1}'.format(

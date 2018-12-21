@@ -664,8 +664,8 @@ def adjust_am_priors(dir, input_model, avg_posterior_vector, output_model,
 
 
 def compute_average_posterior(dir, iter, egs_dir, num_archives,
-                              prior_subset_size,
-                              run_opts, get_raw_nnet_from_am=True):
+                              prior_subset_size, run_opts, 
+                              use_multitask_egs=False, get_raw_nnet_from_am=True):
     """ Computes the average posterior of the network
     """
     for file in glob.glob('{0}/post.{1}.*.vec'.format(dir, iter)):
@@ -679,11 +679,13 @@ def compute_average_posterior(dir, iter, egs_dir, num_archives,
     suffix = "mdl" if get_raw_nnet_from_am else "raw"
     model = "{0}/{1}.{2}".format(dir, iter, suffix)
 
+    scp_or_ark = "scp" if use_multitask_egs else "ark"
+
     common_lib.execute_command(
         """{command} JOB=1:{num_jobs_compute_prior} {prior_queue_opt} \
                 {dir}/log/get_post.{iter}.JOB.log \
                 nnet3-copy-egs \
-                ark:{egs_dir}/egs.{egs_part}.ark ark:- \| \
+                {scp_or_ark}:{egs_dir}/egs.{egs_part}.{scp_or_ark} ark:- \| \
                 nnet3-subset-egs --srand=JOB --n={prior_subset_size} \
                 ark:- ark:- \| \
                 nnet3-merge-egs --minibatch-size=128 ark:- ark:- \| \
@@ -697,6 +699,7 @@ def compute_average_posterior(dir, iter, egs_dir, num_archives,
                     prior_queue_opt=run_opts.prior_queue_opt,
                     iter=iter, prior_subset_size=prior_subset_size,
                     egs_dir=egs_dir, egs_part=egs_part,
+                    scp_or_ark=scp_or_ark,
                     prior_gpu_opt=run_opts.prior_gpu_opt))
 
     # make sure there is time for $dir/post.{iter}.*.vec to appear.

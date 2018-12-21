@@ -1,0 +1,17 @@
+# copy-feats 'ark,s,cs:apply-cmvn  --utt2spk=ark:data/train/split10/6/utt2spk scp:data/train/split10/6/cmvn.scp scp:data/train/split10/6/feats.scp ark:- | splice-feats --left-context=3 --right-context=3 ark:- ark:- | transform-feats exp/tri3/final.mat ark:- ark:- | transform-feats --utt2spk=ark:data/train/split10/6/utt2spk "ark:cat exp/tri3_ali/trans.* |" ark:- ark:- |' ark,scp:/mnt/md1/user_pthuang508/kaldi/egs/timit/s5/data-fmllr-tri3/train/data/feats_fmllr_train.6.ark,/mnt/md1/user_pthuang508/kaldi/egs/timit/s5/data-fmllr-tri3/train/data/feats_fmllr_train.6.scp 
+# Started at Mon Nov 26 17:09:03 CST 2018
+#
+copy-feats 'ark,s,cs:apply-cmvn  --utt2spk=ark:data/train/split10/6/utt2spk scp:data/train/split10/6/cmvn.scp scp:data/train/split10/6/feats.scp ark:- | splice-feats --left-context=3 --right-context=3 ark:- ark:- | transform-feats exp/tri3/final.mat ark:- ark:- | transform-feats --utt2spk=ark:data/train/split10/6/utt2spk "ark:cat exp/tri3_ali/trans.* |" ark:- ark:- |' ark,scp:/mnt/md1/user_pthuang508/kaldi/egs/timit/s5/data-fmllr-tri3/train/data/feats_fmllr_train.6.ark,/mnt/md1/user_pthuang508/kaldi/egs/timit/s5/data-fmllr-tri3/train/data/feats_fmllr_train.6.scp 
+apply-cmvn --utt2spk=ark:data/train/split10/6/utt2spk scp:data/train/split10/6/cmvn.scp scp:data/train/split10/6/feats.scp ark:- 
+transform-feats exp/tri3/final.mat ark:- ark:- 
+transform-feats --utt2spk=ark:data/train/split10/6/utt2spk 'ark:cat exp/tri3_ali/trans.* |' ark:- ark:- 
+splice-feats --left-context=3 --right-context=3 ark:- ark:- 
+LOG (apply-cmvn[5.5.98~1-8ea2a]:main():apply-cmvn.cc:162) Applied cepstral mean normalization to 376 utterances, errors on 0
+LOG (transform-feats[5.5.98~1-8ea2a]:main():transform-feats.cc:158) Overall average [pseudo-]logdet is -88.5225 over 112412 frames.
+LOG (transform-feats[5.5.98~1-8ea2a]:main():transform-feats.cc:161) Applied transform to 376 utterances; 0 had errors.
+LOG (transform-feats[5.5.98~1-8ea2a]:main():transform-feats.cc:158) Overall average logdet is 2.70364 over 112412 frames.
+LOG (transform-feats[5.5.98~1-8ea2a]:main():transform-feats.cc:161) Applied transform to 376 utterances; 0 had errors.
+WARNING (transform-feats[5.5.98~1-8ea2a]:Close():kaldi-io.cc:515) Pipe cat exp/tri3_ali/trans.* | had nonzero return status 13
+LOG (copy-feats[5.5.98~1-8ea2a]:main():copy-feats.cc:143) Copied 376 feature matrices.
+# Accounting: time=1 threads=1
+# Ended (code 0) at Mon Nov 26 17:09:04 CST 2018, elapsed time 1 seconds
