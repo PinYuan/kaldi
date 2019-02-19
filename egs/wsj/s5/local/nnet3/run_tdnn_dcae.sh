@@ -31,7 +31,7 @@ gmm=tri4b        # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
 num_threads_ubm=32
 nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
-tdnn_affix=1a  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
+tdnn_affix=_dcae  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
 
 # Options which are not passed through to run_ivector_common.sh
 train_stage=-10
@@ -40,6 +40,10 @@ srand=0
 reporting_email=
 # set common_egs_dir to use previously dumped egs.
 common_egs_dir=
+
+#weight for dcae
+weight=0.99999999999
+weight_ae=0.00000000001
 
 . ./cmd.sh
 . ./path.sh
@@ -62,7 +66,7 @@ local/nnet3/run_ivector_common.sh --stage $stage --nj $nj \
 
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
-dir=exp/nnet3${nnet3_affix}/tdnn${tdnn_affix}_sp
+dir=exp/nnet3${nnet3_affix}/tdnn${tdnn_affix}_sp/${weight_ae}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 
@@ -78,7 +82,7 @@ if [ $stage -le 12 ]; then
   echo "$0: creating neural net configs using the xconfig parser";
 
   num_targets=$(tree-info $gmm_dir/tree |grep num-pdfs|awk '{print $2}')
-
+  
   mkdir -p $dir/configs
   cat <<EOF > $dir/configs/network.xconfig
   input dim=100 name=ivector
@@ -95,7 +99,14 @@ if [ $stage -le 12 ]; then
   relu-renorm-layer name=tdnn3 dim=650 input=Append(-1,0,1)
   relu-renorm-layer name=tdnn4 dim=650 input=Append(-3,0,3)
   relu-renorm-layer name=tdnn5 dim=650 input=Append(-6,-3,0)
-  output-layer name=output dim=$num_targets max-change=1.5
+
+  relu-renorm-layer name=tdnn6 dim=650
+  relu-renorm-layer name=tdnn7 input=tdnn5 dim=650
+  relu-renorm-layer name=tdnn8 input=Append(0, ReplaceIndex(tdnn6, t, 0)) dim=650
+  relu-renorm-layer name=tdnn9 dim=650
+  relu-renorm-layer name=tdnn10 dim=650
+  output-layer name=output dim=$num_targets input=tdnn6 max-change=1.5 learning-rate-factor=$weight
+  output-layer name=output_ae include-log-softmax=false learning-rate-factor=$weight_ae max-change=1.0 objective-type=quadratic input=tdnn10 dim=40
 EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
 fi
@@ -108,7 +119,7 @@ if [ $stage -le 13 ]; then
      /export/b0{3,4,5,6}/$USER/kaldi-data/egs/tedlium-$(date +'%m_%d_%H_%M')/s5_r2/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/nnet3/train_dnn.py --stage=$train_stage \
+  steps/nnet3/train_dcae_dnn.py --stage=$train_stage \
     --cmd="$decode_cmd" \
     --feat.online-ivector-dir=$train_ivector_dir \
     --feat.cmvn-opts="--norm-means=false --norm-vars=false" \
@@ -124,7 +135,7 @@ if [ $stage -le 13 ]; then
     --trainer.optimization.minibatch-size=256,128 \
     --egs.dir="$common_egs_dir" \
     --cleanup.remove-egs=$remove_egs \
-    --use-gpu=true \
+    --use-gpu=wait \
     --feat-dir=$train_data_dir \
     --ali-dir=$ali_dir \
     --lang=data/lang \

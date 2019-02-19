@@ -23,9 +23,11 @@ decode=true  # set to false to disable the decoding-related scripts.
 #wsj0=/data/corpora0/LDC93S6B
 #wsj1=/data/corpora0/LDC94S13B
 
-wsj0=/export/corpora5/LDC/LDC93S6B
-wsj1=/export/corpora5/LDC/LDC94S13B
+#wsj0=/export/corpora5/LDC/LDC93S6B
+#wsj1=/export/corpora5/LDC/LDC94S13B
 
+wsj0=/mnt/md2/Corpora/WSJ/WSJ0
+wsj1=/mnt/md2/Corpora/WSJ/WSJ1
 
 if [ $stage -le 0 ]; then
   # data preparation.
@@ -42,11 +44,10 @@ if [ $stage -le 0 ]; then
   #
   # "nosp" refers to the dictionary before silence probabilities and pronunciation
   # probabilities are added.
-  local/wsj_prepare_dict.sh --dict-suffix "_nosp" || exit 1;
 
+  local/wsj_prepare_dict.sh --dict-suffix "_nosp" || exit 1;
   utils/prepare_lang.sh data/local/dict_nosp \
                         "<SPOKEN_NOISE>" data/local/lang_tmp_nosp data/lang_nosp || exit 1;
-
   local/wsj_format_data.sh --lang-suffix "_nosp" || exit 1;
 
   # We suggest to run the next three commands in the background,
@@ -322,7 +323,9 @@ fi
 
 if [ $stage -le 7 ]; then
   # Caution: this part needs a GPU.
-  local/chain/run_tdnn.sh
+  #local/chain/run_tdnn.sh
+#   local/nnet3/run_tdnn.sh
+  local/nnet3/run_tdnn_dcae.sh
 fi
 
 exit 0;

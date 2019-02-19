@@ -37,7 +37,7 @@ function filter_text {
   perl -e 'foreach $w (@ARGV) { $bad{$w} = 1; } 
    while(<STDIN>) { @A  = split(" ", $_); $id = shift @A; print "$id ";
      foreach $a (@A) { if (!defined $bad{$a}) { print "$a "; }} print "\n"; }' \
-   '[NOISE]' '[LAUGHTER]' '[VOCALIZED-NOISE]' '<UNK>' '<unk>' '%HESITATION'' {french}' '{hindi}' '{japanese}' '{laugh}' '{noise}' '{sanskrit}' '{sil}' '{sing}' '{taiyu}'
+   '<SIL>' '<UNK>'
 }
 
 $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/log/best_path.LMWT.log \

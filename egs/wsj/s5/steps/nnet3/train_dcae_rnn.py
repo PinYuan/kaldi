@@ -299,21 +299,51 @@ def train(args, run_opts):
         if args.feat_dir is None:
             raise Exception("--feat-dir option is required if you don't supply --egs-dir")
 
-        train_lib.acoustic_model.generate_egs(
-            data=args.feat_dir, alidir=args.ali_dir,
-            egs_dir=default_egs_dir,
-            left_context=left_context,
-            right_context=right_context,
-            left_context_initial=left_context_initial,
-            right_context_final=right_context_final,
-            run_opts=run_opts,
-            frames_per_eg_str=args.chunk_width,
-            srand=args.srand,
-            egs_opts=args.egs_opts,
-            cmvn_opts=args.cmvn_opts,
-            online_ivector_dir=args.online_ivector_dir,
-            samples_per_iter=args.samples_per_iter,
-            stage=args.egs_stage)
+        # train_lib.acoustic_model.generate_egs(
+        #     data=args.feat_dir, alidir=args.ali_dir,
+        #     egs_dir=default_egs_dir,
+        #     left_context=left_context,
+        #     right_context=right_context,
+        #     left_context_initial=left_context_initial,
+        #     right_context_final=right_context_final,
+        #     run_opts=run_opts,
+        #     frames_per_eg_str=args.chunk_width,
+        #     srand=args.srand,
+        #     egs_opts=args.egs_opts,
+        #     cmvn_opts=args.cmvn_opts,
+        #     online_ivector_dir=args.online_ivector_dir,
+        #     samples_per_iter=args.samples_per_iter,
+        #     stage=args.egs_stage)
+
+        common_lib.execute_command(
+            """steps/nnet3/get_egs_dcae.sh {egs_opts} \
+            --cmd "{command}" \
+            --nj 3 \
+            --cmvn-opts "{cmvn_opts}" \
+            --online-ivector-dir "{ivector_dir}" \
+            --left-context {left_context} \
+            --right-context {right_context} \
+            --left-context-initial {left_context_initial} \
+            --right-context-final {right_context_final} \
+            --stage {stage} \
+            --samples-per-iter {frames_per_iter} \
+            --frames-per-eg {frames_per_eg_str} \
+            --num_utts_subset 5 \
+            --srand {srand} \
+            {data_dir} {ali_dir} {target_scp} {egs_dir}""".format(
+                egs_opts=args.egs_opts if args.egs_opts is not None else '',
+                command=run_opts.egs_command,
+                cmvn_opts=args.cmvn_opts if args.cmvn_opts is not None else '',
+                ivector_dir=(args.online_ivector_dir
+                                if args.online_ivector_dir is not None
+                                else ''),
+                left_context=left_context,
+                right_context=right_context,
+                left_context_initial=left_context_initial,
+                right_context_final=right_context_final,
+                stage=args.egs_stage, frames_per_iter=args.samples_per_iter,
+                frames_per_eg_str=args.chunk_width, srand=args.srand,
+                data_dir=args.feat_dir, ali_dir=args.ali_dir, target_scp=args.feat_dir+"/feats.scp", egs_dir=default_egs_dir))
 
     if args.egs_dir is None:
         egs_dir = default_egs_dir

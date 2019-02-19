@@ -83,6 +83,9 @@ GSYMS
 /egs/*/*/exp
 /egs/*/*/feats
 /egs/*/*/lang
+/egs/*/*/run
+/egs/*/*/test
+/egs/*/*/ivectors
 
 # /tools/
 /tools/pocolm/

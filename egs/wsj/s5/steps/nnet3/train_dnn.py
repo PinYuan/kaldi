@@ -263,8 +263,11 @@ def train(args, run_opts):
     assert str(args.frames_per_eg) == frames_per_eg_str
 
     if args.num_jobs_final > num_archives:
-        raise Exception('num_jobs_final cannot exceed the number of archives '
-                        'in the egs directory')
+        args.num_jobs_final = num_archives
+        logger.info('num_jobs_final cannot exceed the number of archives '
+                    'in the egs directory')
+        # raise Exception('num_jobs_final cannot exceed the number of archives '
+        #                 'in the egs directory')
 
     # copy the properties of the egs to dir for
     # use during decoding
