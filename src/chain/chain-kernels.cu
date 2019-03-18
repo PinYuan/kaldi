@@ -287,3 +287,4 @@ void cuda_chain_hmm_backward(dim3 Gr, dim3 Bl,
                                       this_beta, log_prob_deriv,
                                       log_prob_deriv_stride);
 }
+

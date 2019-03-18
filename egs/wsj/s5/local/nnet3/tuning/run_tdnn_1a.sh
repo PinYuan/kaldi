@@ -22,7 +22,7 @@ set -e -o pipefail -u
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=0
+stage=12
 nj=10
 
 train_set=train_si284
@@ -31,7 +31,7 @@ gmm=tri4b        # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
 num_threads_ubm=32
 nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
-tdnn_affix=1a  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
+tdnn_affix=2a  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
 
 # Options which are not passed through to run_ivector_common.sh
 train_stage=-10
@@ -95,6 +95,7 @@ if [ $stage -le 12 ]; then
   relu-renorm-layer name=tdnn3 dim=650 input=Append(-1,0,1)
   relu-renorm-layer name=tdnn4 dim=650 input=Append(-3,0,3)
   relu-renorm-layer name=tdnn5 dim=650 input=Append(-6,-3,0)
+  relu-renorm-layer name=tdnn6 dim=650
   output-layer name=output dim=$num_targets max-change=1.5
 EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
@@ -124,7 +125,7 @@ if [ $stage -le 13 ]; then
     --trainer.optimization.minibatch-size=256,128 \
     --egs.dir="$common_egs_dir" \
     --cleanup.remove-egs=$remove_egs \
-    --use-gpu=true \
+    --use-gpu=wait \
     --feat-dir=$train_data_dir \
     --ali-dir=$ali_dir \
     --lang=data/lang \

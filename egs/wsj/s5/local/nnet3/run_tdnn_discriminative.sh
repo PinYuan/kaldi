@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -o pipefail
 set -e
 # this is run_discriminative.sh
@@ -19,13 +18,18 @@ use_gpu=true  # for training
 cleanup=false  # run with --cleanup true --stage 6 to clean up (remove large things like denlats,
                # alignments and degs).
 
+train_set=train_si284
+nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
+tdnn_affix=_dcae_v3  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
+weight_ae=/0.0000000001
+
 . ./cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
 
-srcdir=exp/nnet3/nnet_ms_a
-train_data_dir=data/train_si284_hires
-online_ivector_dir=exp/nnet3/ivectors_train_si284
+srcdir=exp/nnet3${nnet3_affix}/tdnn${tdnn_affix}_sp${weight_ae}
+train_data_dir=data/${train_set}_sp_hires
+online_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 degs_dir=                     # If provided, will skip the degs directory creation
 lats_dir=                     # If provided, will skip denlats creation
 
@@ -42,7 +46,7 @@ frames_overlap_per_eg=30
 ## Nnet training options
 effective_learning_rate=0.0000125
 max_param_change=1
-num_jobs_nnet=4
+num_jobs_nnet=1
 num_epochs=4
 regularization_opts=          # Applicable for providing --xent-regularize and --l2-regularize options
 minibatch_size=64
@@ -73,7 +77,7 @@ fi
 if [ $stage -le 1 ]; then
   # hardcode no-GPU for alignment, although you could use GPU [you wouldn't
   # get excellent GPU utilization though.]
-  nj=100 # have a high number of jobs because this could take a while, and we might
+  nj=20 # have a high number of jobs because this could take a while, and we might
          # have some stragglers.
   steps/nnet3/align.sh  --cmd "$decode_cmd" --use-gpu false \
     --online-ivector-dir $online_ivector_dir \
@@ -84,11 +88,11 @@ fi
 if [ -z "$lats_dir" ]; then
   lats_dir=${srcdir}_denlats
   if [ $stage -le 2 ]; then
-    nj=50
+    nj=5
     # this doesn't really affect anything strongly, except the num-jobs for one of
     # the phases of get_egs_discriminative.sh below.
     num_threads_denlats=6
-    subsplit=40 # number of jobs that run per job (but 2 run at a time, so total jobs is 80, giving
+    subsplit=6 # number of jobs that run per job (but 2 run at a time, so total jobs is 80, giving
     # total slots = 80 * 6 = 480.
     steps/nnet3/make_denlats.sh --cmd "$decode_cmd" --determinize true \
       --online-ivector-dir $online_ivector_dir \
@@ -151,7 +155,7 @@ if [ $stage -le 5 ]; then
       for year in eval92 dev93; do
         (
           steps/nnet3/decode.sh --nj 8 --cmd "$decode_cmd" --iter $iter \
-            --online-ivector-dir exp/nnet3/ivectors_test_$year \
+            --online-ivector-dir exp/nnet3/ivectors_test_${year}_hires \
             $graph_dir data/test_${year}_hires $dir/decode_${lm_suffix}_${year}_$iter ;
         ) &
       done

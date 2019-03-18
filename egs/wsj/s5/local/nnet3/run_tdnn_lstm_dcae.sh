@@ -61,7 +61,7 @@ num_threads_ubm=32
 nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
 
 # Options which are not passed through to run_ivector_common.sh
-affix=2a  #affix for TDNN+LSTM directory e.g. "1a" or "1b", in case we change the configuration.
+affix=_dcae_v4  #affix for TDNN+LSTM directory e.g. "1a" or "1b", in case we change the configuration.
 common_egs_dir=
 reporting_email=
 
@@ -80,6 +80,10 @@ remove_egs=true
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
+
+#weight for dcae
+weight=0.999999999999
+weight_ae=0.000000000001
 
 . ./cmd.sh
 . ./path.sh
@@ -104,7 +108,7 @@ local/nnet3/run_ivector_common.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lang=data/lang
-dir=exp/nnet3${nnet3_affix}/tdnn_lstm${affix}_sp
+dir=exp/nnet3${nnet3_affix}/tdnn_lstm${affix}_sp/${weight_ae}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 
@@ -140,9 +144,17 @@ if [ $stage -le 12 ]; then
   relu-renorm-layer name=tdnn5 dim=520 input=Append(-3,0,3)
   relu-renorm-layer name=tdnn6 dim=520 input=Append(-3,0,3)
   fast-lstmp-layer name=lstm3 cell-dim=520 recurrent-projection-dim=130 non-recurrent-projection-dim=130 decay-time=20 delay=-3
-  relu-renorm-layer name=tdnn7 dim=520
 
-  output-layer name=output input=tdnn7 output-delay=$label_delay dim=$num_targets max-change=1.5
+  relu-renorm-layer name=tdnn7 dim=520
+  relu-renorm-layer name=tdnn8 input=lstm3 dim=520
+  relu-renorm-layer name=tdnn9 input=Append(0, tdnn7) dim=520
+  relu-renorm-layer name=tdnn10 dim=520
+  relu-renorm-layer name=tdnn11 dim=520
+  relu-renorm-layer name=tdnn12 dim=520
+
+
+  output-layer name=output input=tdnn7 output-delay=$label_delay dim=$num_targets max-change=1.5 learning-rate-factor=$weight
+  output-layer name=output_ae include-log-softmax=false learning-rate-factor=$weight_ae max-change=1.0 objective-type=quadratic input=tdnn12 output-delay=$label_delay dim=40
 
 EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
@@ -155,7 +167,7 @@ if [ $stage -le 13 ]; then
      /export/b0{3,4,5,6}/$USER/kaldi-data/egs/tedlium-$(date +'%m_%d_%H_%M')/s5_r2/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/nnet3/train_rnn.py --stage=$train_stage \
+  steps/nnet3/train_dcae_rnn.py --stage=$train_stage \
     --cmd="$decode_cmd" \
     --feat.online-ivector-dir=$train_ivector_dir \
     --feat.cmvn-opts="--norm-means=false --norm-vars=false" \
@@ -271,7 +283,7 @@ if $test_online_decoding && [ $stage -le 16 ]; then
       for lmtype in tgpr bd_tgpr; do
         graph_dir=$gmm_dir/graph_${lmtype}
         steps/online/nnet3/decode.sh \
-          --nj $nj --cmd "$decode_cmd" \
+          --nj $nj --cmd "$decode_cmd" --num-threads 2 \
           $graph_dir data/${data} ${dir}_online/decode_${lmtype}_${data_affix} || exit 1
       done
       steps/lmrescore.sh --cmd "$decode_cmd" data/lang_test_{tgpr,tg} \
@@ -284,7 +296,6 @@ if $test_online_decoding && [ $stage -le 16 ]; then
   wait
   [ -f $dir/.error ] && echo "$0: there was a problem while decoding" && exit 1
 fi
-
 
 
 exit 0;

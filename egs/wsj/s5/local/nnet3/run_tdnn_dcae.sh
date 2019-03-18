@@ -22,7 +22,7 @@ set -e -o pipefail -u
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=0
+stage=12
 nj=10
 
 train_set=train_si284
@@ -31,7 +31,7 @@ gmm=tri4b        # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
 num_threads_ubm=32
 nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
-tdnn_affix=_dcae  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
+tdnn_affix=_dcae_v3  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
 
 # Options which are not passed through to run_ivector_common.sh
 train_stage=-10
@@ -42,8 +42,8 @@ reporting_email=
 common_egs_dir=
 
 #weight for dcae
-weight=0.99999999999
-weight_ae=0.00000000001
+weight=0.999999999
+weight_ae=0.000000001
 
 . ./cmd.sh
 . ./path.sh
@@ -103,10 +103,8 @@ if [ $stage -le 12 ]; then
   relu-renorm-layer name=tdnn6 dim=650
   relu-renorm-layer name=tdnn7 input=tdnn5 dim=650
   relu-renorm-layer name=tdnn8 input=Append(0, ReplaceIndex(tdnn6, t, 0)) dim=650
-  relu-renorm-layer name=tdnn9 dim=650
-  relu-renorm-layer name=tdnn10 dim=650
   output-layer name=output dim=$num_targets input=tdnn6 max-change=1.5 learning-rate-factor=$weight
-  output-layer name=output_ae include-log-softmax=false learning-rate-factor=$weight_ae max-change=1.0 objective-type=quadratic input=tdnn10 dim=40
+  output-layer name=output_ae include-log-softmax=false learning-rate-factor=$weight_ae max-change=1.0 objective-type=quadratic input=tdnn8 dim=40
 EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
 fi
