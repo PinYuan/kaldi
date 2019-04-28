@@ -1,6 +1,6 @@
 #!/bin/bash
 
-stage=8
+stage=7
 train=true   # set to false to disable the training-related scripts
              # note: you probably only want to set --train false if you
              # are using at least --stage 1.
@@ -330,14 +330,14 @@ if [ $stage -le 7 ]; then
 #   local/nnet3/run_tdnn_lstm_dcae.sh
 fi
 
-if [ $stage -le 8 ]; then
-  # Caution: this part needs a GPU.
-  #local/chain/run_tdnn.sh
-#   local/nnet3/run_tdnn.sh
-#   local/nnet3/run_tdnn_dcae.sh
-#   local/nnet3/run_tdnn_lstm.sh
-  local/nnet3/run_tdnn_discriminative.sh
-fi
+# if [ $stage -le 8 ]; then
+#   # Caution: this part needs a GPU.
+#   #local/chain/run_tdnn.sh
+# #   local/nnet3/run_tdnn.sh
+# #   local/nnet3/run_tdnn_dcae.sh
+# #   local/nnet3/run_tdnn_lstm.sh
+#   local/nnet3/run_tdnn_discriminative.sh
+# fi
 
 exit 0;
 

@@ -10,14 +10,14 @@
 set -e
 set -uo pipefail
 
-stage=1
+stage=0
 train_stage=-10 # can be used to start training in the middle.
 get_egs_stage=0
 use_gpu=true  # for training
 cleanup=false  # run with --cleanup true --stage 6 to clean up (remove large things like
                # alignments and degs).
 degs_dir=  # set this to use preexisting degs.
-nj=60 # have a high number of jobs because this could take a while, and we might
+nj=20 # have a high number of jobs because this could take a while, and we might
        # have some stragglers.
 train_set=train_si284
 test_sets="test_dev93 test_eval92"
@@ -56,7 +56,7 @@ extra_right_context=0
 effective_learning_rate=0.0000025
 last_layer_factor=0.5
 max_param_change=1
-num_jobs_nnet=4
+num_jobs_nnet=1
 num_epochs=3
 regularization_opts=          # Applicable for providing --xent-regularize and --l2-regularize options,
                               # in chain models.
@@ -72,10 +72,15 @@ decode_start_epoch=1 # can be used to avoid decoding all epochs, e.g. if we deci
 . ./path.sh
 . ./utils/parse_options.sh
 
+nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
+tdnn_affix=_dcaeU_v5  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
+weight_ae=/0.000000001
+# weight_ae=
+
 gmm_dir=exp/tri4b
-srcdir=exp/nnet3/tdnn_lstm1a_sp
+srcdir=exp/nnet3${nnet3_affix}/tdnn_lstm${tdnn_affix}_sp${weight_ae}
 train_data_dir=data/${train_set}_sp_hires
-online_ivector_dir=exp/nnet3/ivectors_${train_set}_sp_hires
+online_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 dir=${srcdir}_${criterion}${disc_affix}
 
 if $use_gpu; then
@@ -122,6 +127,7 @@ if [ -z "$degs_dir" ]; then
     steps/nnet3/get_degs.sh \
       --cmd "$decode_cmd --mem 10G" --num-threads 3 \
       --max-copy-jobs $max_copy_jobs \
+      --nj 10 \
       --extra-left-context $extra_left_context \
       --extra-right-context $extra_right_context \
       --extra-left-context-initial 0 --extra-right-context-final 0 \
@@ -162,7 +168,7 @@ if [ $stage -le 4 ]; then
               --extra-left-context-initial 0 \
               --extra-right-context-final 0 \
               --frames-per-chunk $frames_per_chunk_decoding \
-              --nj $nj --cmd "$decode_cmd" --num-threads 4 --iter $iter \
+              --nj $nj --cmd "$decode_cmd" --num-threads 2 --iter $iter \
               --online-ivector-dir exp/nnet3/ivectors_${data}_hires \
               $graph_dir data/${data}_hires ${dir}/decode_${lmtype}_${data_affix}_${iter} || exit 1
           done

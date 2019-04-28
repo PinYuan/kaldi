@@ -61,7 +61,7 @@ num_threads_ubm=32
 nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
 
 # Options which are not passed through to run_ivector_common.sh
-affix=_dcae_v4  #affix for TDNN+LSTM directory e.g. "1a" or "1b", in case we change the configuration.
+affix=_dcaeU_v5  #affix for TDNN+LSTM directory e.g. "1a" or "1b", in case we change the configuration.
 common_egs_dir=
 reporting_email=
 
@@ -82,8 +82,8 @@ remove_egs=true
 test_online_decoding=false  # if true, it will run the last decoding stage.
 
 #weight for dcae
-weight=0.999999999999
-weight_ae=0.000000000001
+weight=0.999999995
+weight_ae=0.000000005
 
 . ./cmd.sh
 . ./path.sh
@@ -149,9 +149,10 @@ if [ $stage -le 12 ]; then
   relu-renorm-layer name=tdnn8 input=lstm3 dim=520
   relu-renorm-layer name=tdnn9 input=Append(0, tdnn7) dim=520
   relu-renorm-layer name=tdnn10 dim=520
-  relu-renorm-layer name=tdnn11 dim=520
-  relu-renorm-layer name=tdnn12 dim=520
-
+  # relu-renorm-layer name=tdnn11 dim=520
+  # relu-renorm-layer name=tdnn12 dim=520
+  relu-renorm-layer name=tdnn11 input=Append(0, tdnn2) dim=1040
+  relu-renorm-layer name=tdnn12 input=Append(0, tdnn1) dim=1040
 
   output-layer name=output input=tdnn7 output-delay=$label_delay dim=$num_targets max-change=1.5 learning-rate-factor=$weight
   output-layer name=output_ae include-log-softmax=false learning-rate-factor=$weight_ae max-change=1.0 objective-type=quadratic input=tdnn12 output-delay=$label_delay dim=40

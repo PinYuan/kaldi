@@ -120,7 +120,9 @@ static bool ProcessFile(const GeneralMatrix &feats,
       int32 t = i + start_frame_subsampled;
       int32 ali=-1, temp, count=0;
       if (t < pdf_post.size()) labels[i] = pdf_post[t];
-      for (std::vector<std::pair<int32, BaseFloat> >::iterator iter = labels[i].begin(); iter != labels[i].end(); ++iter) {
+      for (std::vector<std::pair<int32, BaseFloat> >::iterator iter = 
+            labels[i].begin();
+            iter != labels[i].end(); ++iter) {
         iter->second *= chunk.output_weights[i];
         ali = iter->first;
       }
@@ -142,30 +144,30 @@ static bool ProcessFile(const GeneralMatrix &feats,
       }
     }
 
+    // eg.io.push_back(
+    //     NnetIo("output", num_pdfs, 0, labels, frame_subsampling_factor));
     eg.io.push_back(
-        NnetIo("output", num_pdfs, 0, labels, frame_subsampling_factor));
-    eg.io.push_back(
-        NnetIo("output_res", num_pdfs, 0, residuals, frame_subsampling_factor));
+        NnetIo("output", num_pdfs, 0, residuals, frame_subsampling_factor));
 
-    // get-egs-dense-targets
-    KALDI_ASSERT(start_frame_subsampled + num_frames_subsampled - 1 <
-                 targets.NumRows());
+    // // get-egs-dense-targets
+    // KALDI_ASSERT(start_frame_subsampled + num_frames_subsampled - 1 <
+    //              targets.NumRows());
 
-    // add the labels.
-    Matrix<BaseFloat> targets_part(num_frames_subsampled, targets.NumCols());
-    for (int32 i = 0; i < num_frames_subsampled; i++) {
-      // Copy the i^th row of the target matrix from the (t+i)^th row of the
-      // input targets matrix
-      int32 t = i + start_frame_subsampled;
-      if (t >= targets.NumRows()) t = targets.NumRows() - 1;
-      SubVector<BaseFloat> this_target_dest(targets_part, i);
-      SubVector<BaseFloat> this_target_src(targets, t);
-      this_target_dest.CopyFromVec(this_target_src);
-    }
+    // // add the labels.
+    // Matrix<BaseFloat> targets_part(num_frames_subsampled, targets.NumCols());
+    // for (int32 i = 0; i < num_frames_subsampled; i++) {
+    //   // Copy the i^th row of the target matrix from the (t+i)^th row of the
+    //   // input targets matrix
+    //   int32 t = i + start_frame_subsampled;
+    //   if (t >= targets.NumRows()) t = targets.NumRows() - 1;
+    //   SubVector<BaseFloat> this_target_dest(targets_part, i);
+    //   SubVector<BaseFloat> this_target_src(targets, t);
+    //   this_target_dest.CopyFromVec(this_target_src);
+    // }
 
-    // push this created targets matrix into the eg
-    eg.io.push_back(
-        NnetIo("output_ae", 0, targets_part, frame_subsampling_factor));
+    // // push this created targets matrix into the eg
+    // eg.io.push_back(
+    //     NnetIo("output_ae", 0, targets_part, frame_subsampling_factor));
 
     if (compress) eg.Compress();
 

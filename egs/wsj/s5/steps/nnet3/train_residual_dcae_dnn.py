@@ -18,10 +18,10 @@ import sys
 import traceback
 
 sys.path.insert(0, 'steps')
-import libs.nnet3.train.common as common_train_lib
-import libs.common as common_lib
-import libs.nnet3.train.frame_level_objf as train_lib
 import libs.nnet3.report.log_parse as nnet3_log_parse
+import libs.nnet3.train.frame_level_objf as train_lib
+import libs.common as common_lib
+import libs.nnet3.train.common as common_train_lib
 
 
 logger = logging.getLogger('libs')
@@ -81,6 +81,9 @@ def get_args():
                         rule as accepted by the --minibatch-size option of
                         nnet3-merge-egs; run that program without args to see
                         the format.""")
+    
+    parser.add_argument("--weight", type=float, required=False, default=1,
+                        help="weight for residual layer")
 
     # General options
     parser.add_argument("--feat-dir", type=str, required=False,
@@ -113,12 +116,13 @@ def process_args(args):
         raise Exception("--egs.frames-per-eg should have a minimum value of 1")
 
     if not common_train_lib.validate_minibatch_size_str(args.minibatch_size):
-        raise Exception("--trainer.rnn.num-chunk-per-minibatch has an invalid value")
+        raise Exception(
+            "--trainer.rnn.num-chunk-per-minibatch has an invalid value")
 
     if (not os.path.exists(args.dir)):
         raise Exception("This script expects --dir={0} to exist.")
     if (not os.path.exists(args.dir+"/configs") and
-        (args.input_model is None or not os.path.exists(args.input_model))):
+            (args.input_model is None or not os.path.exists(args.input_model))):
         raise Exception("Either --trainer.input-model option should be supplied, "
                         "and exist; or the {0}/configs directory should exist."
                         "{0}/configs is the output of make_configs.py"
@@ -232,11 +236,13 @@ def train(args, run_opts):
                                              dir=args.dir))
 
     default_egs_dir = '{0}/egs'.format(args.dir)
+    residual_egs_dir = '{0}/regs'.format(args.dir)
     if (args.stage <= -4) and args.egs_dir is None:
         logger.info("Generating egs")
 
         if args.feat_dir is None:
-            raise Exception("--feat-dir option is required if you don't supply --egs-dir")
+            raise Exception(
+                "--feat-dir option is required if you don't supply --egs-dir")
 
         # train_lib.acoustic_model.generate_egs(
         #     data=args.feat_dir, alidir=args.ali_dir, egs_dir=default_egs_dir,
@@ -249,7 +255,33 @@ def train(args, run_opts):
         #     online_ivector_dir=args.online_ivector_dir,
         #     samples_per_iter=args.samples_per_iter,
         #     stage=args.egs_stage)
-        
+
+        common_lib.execute_command(
+            """steps/nnet3/get_egs_dcae.sh {egs_opts} \
+                --cmd "{command}" \
+                --nj 3 \
+                --cmvn-opts "{cmvn_opts}" \
+                --online-ivector-dir "{ivector_dir}" \
+                --left-context {left_context} \
+                --right-context {right_context} \
+                --stage {stage} \
+                --samples-per-iter {frames_per_iter} \
+                --frames-per-eg {frames_per_eg_str} \
+                --num_utts_subset 5 \
+                --srand {srand} \
+                {data_dir} {ali_dir} {target_scp} {egs_dir}""".format(
+                egs_opts=args.egs_opts if args.egs_opts is not None else '',
+                command=run_opts.egs_command,
+                cmvn_opts=args.cmvn_opts if args.cmvn_opts is not None else '',
+                ivector_dir=(args.online_ivector_dir
+                             if args.online_ivector_dir is not None
+                             else ''),
+                left_context=left_context,
+                right_context=right_context,
+                stage=args.egs_stage, frames_per_iter=args.samples_per_iter,
+                frames_per_eg_str=str(args.frames_per_eg), srand=args.srand,
+                data_dir=args.feat_dir, ali_dir=args.ali_dir, target_scp=args.feat_dir+"/feats.scp", egs_dir=default_egs_dir))
+
         common_lib.execute_command(
             """steps/nnet3/get_egs_residual_dcae.sh {egs_opts} \
                 --cmd "{command}" \
@@ -268,13 +300,13 @@ def train(args, run_opts):
                 command=run_opts.egs_command,
                 cmvn_opts=args.cmvn_opts if args.cmvn_opts is not None else '',
                 ivector_dir=(args.online_ivector_dir
-                                if args.online_ivector_dir is not None
-                                else ''),
+                             if args.online_ivector_dir is not None
+                             else ''),
                 left_context=left_context,
                 right_context=right_context,
                 stage=args.egs_stage, frames_per_iter=args.samples_per_iter,
-                frames_per_eg_str=str(args.frames_per_eg), srand=args.srand, 
-                data_dir=args.feat_dir, ali_dir=args.ali_dir, target_scp=args.feat_dir+"/feats.scp", egs_dir=default_egs_dir))
+                frames_per_eg_str=str(args.frames_per_eg), srand=args.srand,
+                data_dir=args.feat_dir, ali_dir=args.ali_dir, target_scp=args.feat_dir+"/feats.scp", egs_dir=residual_egs_dir))
 
     if args.egs_dir is None:
         egs_dir = default_egs_dir
@@ -289,7 +321,8 @@ def train(args, run_opts):
     assert str(args.frames_per_eg) == frames_per_eg_str
 
     if args.num_jobs_final > num_archives:
-        logger.info('num_jobs_final cannot exceed the number of archives in the egs directory')
+        logger.info(
+            'num_jobs_final cannot exceed the number of archives in the egs directory')
         args.num_jobs_final = num_archives
         # raise Exception('num_jobs_final cannot exceed the number of archives '
         #                 'in the egs directory')
@@ -383,6 +416,46 @@ def train(args, run_opts):
                 dir=args.dir,
                 iter=iter,
                 srand=args.srand,
+                egs_dir=residual_egs_dir,
+                num_jobs=current_num_jobs,
+                num_archives_processed=num_archives_processed,
+                num_archives=num_archives,
+                learning_rate=lrate,
+                dropout_edit_string=common_train_lib.get_dropout_edit_string(
+                    args.dropout_schedule,
+                    float(num_archives_processed) / num_archives_to_process,
+                    iter),
+                train_opts=' '.join(args.train_opts),
+                minibatch_size_str=args.minibatch_size,
+                frames_per_eg=args.frames_per_eg,
+                momentum=args.momentum,
+                max_param_change=args.max_param_change,
+                shrinkage_value=shrinkage_value,
+                shuffle_buffer_size=args.shuffle_buffer_size,
+                run_opts=run_opts)
+            
+            edit = """'set-learning-rate-factor name=output.affine learning-rate-factor=0.9999999995
+                        rename-node old-name=tdnn6.affine new-name=tdnn7_tmp.affine;
+                        rename-node old-name=tdnn6.relu new-name=tdnn7_tmp.relu;
+                        rename-node old-name=tdnn6.renorm new-name=tdnn7_tmp.renorm;
+                        rename-node old-name=tdnn7.affine new-name=tdnn6.affine;
+                        rename-node old-name=tdnn7.relu new-name=tdnn6.relu;
+                        rename-node old-name=tdnn7.renorm new-name=tdnn6.renorm;
+                        rename-node old-name=tdnn7_tmp.affine new-name=tdnn7.affine;
+                        rename-node old-name=tdnn7_tmp.relu new-name=tdnn7.relu;
+                        rename-node old-name=tdnn7_tmp.renorm new-name=tdnn7.renorm;'"""
+
+            common_lib.execute_command(
+                """nnet3-am-copy --edits={edits} {dir}/{model_in}.mdl {dir}/{model_out}.mdl""".format(
+                    edits=edit,
+                    dir=args.dir,
+                    model_in=str(iter+1),
+                    model_out=str(iter)))
+
+            train_lib.common.train_one_iteration(
+                dir=args.dir,
+                iter=iter,
+                srand=args.srand,
                 egs_dir=egs_dir,
                 num_jobs=current_num_jobs,
                 num_archives_processed=num_archives_processed,
@@ -400,6 +473,24 @@ def train(args, run_opts):
                 shrinkage_value=shrinkage_value,
                 shuffle_buffer_size=args.shuffle_buffer_size,
                 run_opts=run_opts)
+
+            edit = """'set-learning-rate-factor name=output.affine learning-rate-factor={}
+                        rename-node old-name=tdnn6.affine new-name=tdnn7_tmp.affine;
+                        rename-node old-name=tdnn6.relu new-name=tdnn7_tmp.relu;
+                        rename-node old-name=tdnn6.renorm new-name=tdnn7_tmp.renorm;
+                        rename-node old-name=tdnn7.affine new-name=tdnn6.affine;
+                        rename-node old-name=tdnn7.relu new-name=tdnn6.relu;
+                        rename-node old-name=tdnn7.renorm new-name=tdnn6.renorm;
+                        rename-node old-name=tdnn7_tmp.affine new-name=tdnn7.affine;
+                        rename-node old-name=tdnn7_tmp.relu new-name=tdnn7.relu;
+                        rename-node old-name=tdnn7_tmp.renorm new-name=tdnn7.renorm;'""".format(args.weight)
+
+            common_lib.execute_command(
+                """nnet3-am-copy --edits={edits} {dir}/{model_in}.mdl {dir}/{model_out}.mdl""".format(
+                    edits=edit,
+                    dir=args.dir,
+                    model_in=str(iter+1),
+                    model_out=str(iter+1)))
 
             if args.cleanup:
                 # do a clean up everythin but the last 2 models, under certain
@@ -445,11 +536,10 @@ def train(args, run_opts):
 
         logger.info("Re-adjusting priors based on computed posteriors")
         combined_or_last_numbered_model = "{dir}/{iter}.mdl".format(dir=args.dir,
-                iter=real_iter)
+                                                                    iter=real_iter)
         final_model = "{dir}/final.mdl".format(dir=args.dir)
         train_lib.common.adjust_am_priors(args.dir, combined_or_last_numbered_model,
-                avg_post_vec_file, final_model, run_opts)
-
+                                          avg_post_vec_file, final_model, run_opts)
 
     if args.cleanup:
         logger.info("Cleaning up the experiment directory "
@@ -466,7 +556,8 @@ def train(args, run_opts):
             remove_egs=remove_egs)
 
     # do some reporting
-    [report, times, data] = nnet3_log_parse.generate_acc_logprob_report(args.dir)
+    [report, times, data] = nnet3_log_parse.generate_acc_logprob_report(
+        args.dir)
     if args.email is not None:
         common_lib.send_mail(report, "Update : Expt {0} : "
                                      "complete".format(args.dir), args.email)

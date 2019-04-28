@@ -86,6 +86,8 @@ GSYMS
 /egs/*/*/run
 /egs/*/*/test
 /egs/*/*/ivectors
+/egs/*/*/rnnlm
+/egs/*/rnnlm
 
 # /tools/
 /tools/pocolm/

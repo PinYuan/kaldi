@@ -11,7 +11,7 @@ set -e
 . ./cmd.sh
 
 
-stage=0
+stage=4
 train_stage=-10 # can be used to start training in the middle.
 get_egs_stage=-10
 use_gpu=true  # for training
@@ -20,8 +20,9 @@ cleanup=false  # run with --cleanup true --stage 6 to clean up (remove large thi
 
 train_set=train_si284
 nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
-tdnn_affix=_dcae_v3  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
-weight_ae=/0.0000000001
+tdnn_affix=_dcaeU_v7  #affix for TDNN directory e.g. "1a" or "1b", in case we change the configuration.
+weight_ae=/0.000000000001
+# weight_ae=
 
 . ./cmd.sh
 . ./path.sh

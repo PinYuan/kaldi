@@ -336,7 +336,8 @@ if [ $stage -le 8 ]; then
 #   local/nnet3/run_tdnn.sh
 #   local/nnet3/run_tdnn_dcae.sh
 #   local/nnet3/run_tdnn_lstm.sh
-  local/nnet3/run_tdnn_discriminative.sh
+#   local/nnet3/run_tdnn_discriminative.sh
+  local/nnet3/run_tdnn_lstm_disc.sh
 fi
 
 exit 0;

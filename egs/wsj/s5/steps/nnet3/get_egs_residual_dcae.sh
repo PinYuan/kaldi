@@ -398,7 +398,7 @@ if [ $stage -le 4 ]; then
   done
   echo "$0: Generating training examples on disk"
   # The examples will go round-robin to egs_list.
-  $cmd JOB=1:$nj $dir/log/get_egs.JOB.log \
+  $cmd JOB=1:$nj $dir/log/get_regs.JOB.log \
     nnet3-get-egs-residual-dcae --num-pdfs=$num_pdfs --num-targets=$num_targets --frame-subsampling-factor=$frame_subsampling_factor \
     $ivector_opts $egs_opts "$feats" \
     "ark,s,cs:filter_scp.pl $sdata/JOB/utt2spk $dir/ali.scp | ali-to-pdf $alidir/final.mdl scp:- ark:- | ali-to-post ark:- ark:- |" "$targets" \
