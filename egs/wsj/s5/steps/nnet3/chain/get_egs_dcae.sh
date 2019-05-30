@@ -77,15 +77,34 @@ acwt=0.1   # For pruning
 deriv_weights_scp=
 generate_egs_scp=false
 
+#get_egs_dense_targets
+feat_type=raw     # set it to 'lda' to use LDA features.
+target_type=dense # dense to have dense targets, 
+                  # sparse to have posteriors targets
+num_targets=
+deriv_weights_scp=
+valid_left_context=   # amount of left_context for validation egs, typically used in
+                      # recurrent architectures to ensure matched condition with
+                      # training egs
+valid_right_context=  # amount of right_context for validation egs
+reduce_frames_per_eg=true  # If true, this script may reduce the frames_per_eg
+                           # if there is only one archive and even with the
+                           # reduced frames_per_eg, the number of
+                           # samples_per_iter that would result is less than or
+                           # equal to the user-specified value.
+target_clean=false  #For dcae training with multi-condition data. Set 
+                    #to true if you wish the target for the autoencoder output 
+                    #is the clean version of the input data.
+
 echo "$0 $@"  # Print the command line for logging
 
 if [ -f path.sh ]; then . ./path.sh; fi
 . parse_options.sh || exit 1;
 
 
-if [ $# != 4 ]; then
-  echo "Usage: $0 [opts] <data> <chain-dir> <lattice-dir> <egs-dir>"
-  echo " e.g.: $0 data/train exp/tri4_nnet exp/tri3_lats exp/tri4_nnet/egs"
+if [ $# != 5 ]; then
+  echo "Usage: $0 [opts] <data> <chain-dir> <lattice-dir> <targets-scp> <egs-dir>"
+  echo " e.g.: $0 data/train exp/tri4_nnet exp/tri3_lats data/train/feats.scp exp/tri4_nnet/egs"
   echo ""
   echo "From <chain-dir>, 0.trans_mdl (the transition-model), tree (the tree)"
   echo "and normalization.fst (the normalization FST, derived from the denominator FST)"
@@ -126,11 +145,13 @@ fi
 data=$1
 chaindir=$2
 latdir=$3
-dir=$4
+targets_scp=$4
+dir=$5
 
 echo $data
 echo $chaindir
 echo $latdir
+echo $targets_scp
 echo $dir
 
 # Check some files.
@@ -138,7 +159,7 @@ echo $dir
   extra_files="$online_ivector_dir/ivector_online.scp $online_ivector_dir/ivector_period"
 
 for f in $data/feats.scp $latdir/lat.1.gz $latdir/final.mdl \
-         $chaindir/{0.trans_mdl,tree,normalization.fst} $extra_files; do
+         $chaindir/{0.trans_mdl,tree,normalization.fst} $targets_scp $extra_files; do
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
 
@@ -312,6 +333,47 @@ if [ ! -z "$lattice_lm_scale" ]; then
   print (1.0 - $lattice_lm_scale);") || exit 1
 fi
 
+
+# # from get_egs_dense_targets
+# egs_opts="--left-context=$left_context --right-context=$right_context --compress=$compress"
+# [ ! -z "$deriv_weights_scp" ] && egs_opts="$egs_opts --deriv-weights-rspecifier=scp:$deriv_weights_scp"
+# [ -z $valid_left_context ] &&  valid_left_context=$left_context;
+# [ -z $valid_right_context ] &&  valid_right_context=$right_context;
+# valid_egs_opts="--left-context=$valid_left_context --right-context=$valid_right_context --compress=$compress"
+# echo $left_context > $dir/info/left_context
+# echo $right_context > $dir/info/right_context
+if [ $target_type == "dense" ]; then
+  num_targets=$(feat-to-dim "scp:$targets_scp" - 2>/dev/null) || exit 1
+else
+  if [ -z "$num_targets" ]; then
+    echo "$0: num-targets is not set" 
+    exit 1
+  fi
+fi
+
+for n in `seq $nj`; do
+  utils/filter_scp.pl $sdata/$n/utt2spk $targets_scp > $dir/targets.$n.scp
+done
+targets_scp_split=$dir/targets.JOB.scp
+case $target_type in
+  "dense") 
+    # get_egs_program="nnet3-get-egs-dense-targets --num-targets=$num_targets"
+    targets="ark:utils/filter_scp.pl --exclude $dir/valid_uttlist $targets_scp_split | copy-feats scp:- ark:- |"
+    valid_targets="ark:utils/filter_scp.pl $dir/valid_uttlist $targets_scp | copy-feats scp:- ark:- |"
+    train_subset_targets="ark:utils/filter_scp.pl $dir/train_subset_uttlist $targets_scp | copy-feats scp:- ark:- |"
+    ;;
+  # "sparse")
+  #   get_egs_program="nnet3-get-egs --num-pdfs=$num_targets"
+  #   targets="ark:utils/filter_scp.pl --exclude $dir/valid_uttlist $targets_scp_split | ali-to-post scp:- ark:- |"
+  #   valid_targets="ark:utils/filter_scp.pl $dir/valid_uttlist $targets_scp | ali-to-post scp:- ark:- |" \
+  #   train_subset_targets="ark:utils/filter_scp.pl $dir/train_subset_uttlist $targets_scp | ali-to-post scp:- ark:- |"
+  #   ;;
+  default)
+    echo "$0: Unknown --target-type $target_type. Choices are dense and sparse"
+    exit 1
+esac
+
+
 echo $left_context > $dir/info/left_context
 echo $right_context > $dir/info/right_context
 echo $left_context_initial > $dir/info/left_context_initial
@@ -334,19 +396,19 @@ if [ $stage -le 2 ]; then
       lattice-align-phones --replace-output-symbols=true $latdir/final.mdl scp:- ark:- \| \
       chain-get-supervision $chain_supervision_all_opts $chaindir/tree $chaindir/0.trans_mdl \
         ark:- ark:- \| \
-      nnet3-chain-get-egs $ivector_opts --srand=$srand \
+      nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets \
          $egs_opts --normalization-fst-scale=$normalization_fst_scale \
          $trans_mdl_opt $chaindir/normalization.fst \
-        "$valid_feats" ark,s,cs:- "ark:$dir/valid_all.cegs" || exit 1
+        "$valid_feats" ark,s,cs:- "$valid_targets" "ark:$dir/valid_all.cegs" || exit 1
     $cmd $dir/log/create_train_subset.log \
       utils/filter_scp.pl $dir/train_subset_uttlist $dir/lat_special.scp \| \
       lattice-align-phones --replace-output-symbols=true $latdir/final.mdl scp:- ark:- \| \
       chain-get-supervision $chain_supervision_all_opts \
         $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
-      nnet3-chain-get-egs $ivector_opts --srand=$srand \
+      nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets\
         $egs_opts --normalization-fst-scale=$normalization_fst_scale \
         $trans_mdl_opt $chaindir/normalization.fst \
-        "$train_subset_feats" ark,s,cs:- "ark:$dir/train_subset_all.cegs" || exit 1
+        "$train_subset_feats" ark,s,cs:- "$train_subset_targets" "ark:$dir/train_subset_all.cegs" || exit 1
     wait
     sleep 5  # wait for file system to sync.
     echo "... Getting subsets of validation examples for diagnostics and combination."
@@ -410,9 +472,9 @@ if [ $stage -le 4 ]; then
       "$lats_rspecifier" ark:- \| \
     chain-get-supervision $chain_supervision_all_opts \
       $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
-    nnet3-chain-get-egs $ivector_opts --srand=\$[JOB+$srand] $egs_opts \
+    nnet3-chain-get-egs-dcae $ivector_opts --srand=\$[JOB+$srand] $egs_opts --num-targets=$num_targets \
       --num-frames-overlap=$frames_overlap_per_eg $trans_mdl_opt \
-     "$feats" ark,s,cs:- ark:- \| \
+     "$feats" ark,s,cs:- "$targets" ark:- \| \
     nnet3-chain-copy-egs --random=true --srand=\$[JOB+$srand] ark:- $egs_list || exit 1;
 fi
 

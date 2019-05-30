@@ -28,6 +28,7 @@
 #include "nnet3/nnet-training.h"
 #include "chain/chain-training.h"
 #include "chain/chain-den-graph.h"
+#include "nnet3/nnet-training.h"
 
 namespace kaldi {
 namespace nnet3 {
@@ -111,7 +112,6 @@ class NnetChainTrainer {
   // when the class is initialized.
   int32 srand_seed_;
 };
-
 
 } // namespace nnet3
 } // namespace kaldi
