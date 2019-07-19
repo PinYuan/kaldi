@@ -198,6 +198,11 @@ if [ -f $data/utt2uniq ]; then  # this matters if you use data augmentation.
   rm $dir/uniq2utt $dir/valid_uttlist.tmp
 fi
 
+if [ $target_clean == "true" ];then
+  echo "target_clean detected"
+  steps/chain/make_clean_uttlist.py $dir/valid_uttlist
+fi
+
 echo "$0: creating egs.  To ensure they are not deleted later you can do:  touch $dir/.nodelete"
 
 awk '{print $1}' $data/utt2spk | \
@@ -206,6 +211,11 @@ awk '{print $1}' $data/utt2spk | \
 len_uttlist=$(wc -l <$dir/train_subset_uttlist)
 if [ $len_uttlist -lt $num_utts_subset ]; then
   echo "Number of utterances is very small. Please check your data." && exit 1;
+fi
+
+if [ $target_clean == "true" ];then
+  echo "target_clean detected"
+  steps/chain/make_clean_uttlist.py $dir/train_subset_uttlist
 fi
 
 ## Set up features.
@@ -361,6 +371,9 @@ case $target_type in
     targets="ark:utils/filter_scp.pl --exclude $dir/valid_uttlist $targets_scp_split | copy-feats scp:- ark:- |"
     valid_targets="ark:utils/filter_scp.pl $dir/valid_uttlist $targets_scp | copy-feats scp:- ark:- |"
     train_subset_targets="ark:utils/filter_scp.pl $dir/train_subset_uttlist $targets_scp | copy-feats scp:- ark:- |"
+    # targets="copy-feats scp:$targets_scp_split ark:- |"
+    # valid_targets="copy-feats scp:$targets_scp ark:- |"
+    # train_subset_targets="copy-feats scp:$targets_scp ark:- |"
     ;;
   # "sparse")
   #   get_egs_program="nnet3-get-egs --num-pdfs=$num_targets"
@@ -396,7 +409,7 @@ if [ $stage -le 2 ]; then
       lattice-align-phones --replace-output-symbols=true $latdir/final.mdl scp:- ark:- \| \
       chain-get-supervision $chain_supervision_all_opts $chaindir/tree $chaindir/0.trans_mdl \
         ark:- ark:- \| \
-      nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets \
+      nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets --target-clean=$target_clean \
          $egs_opts --normalization-fst-scale=$normalization_fst_scale \
          $trans_mdl_opt $chaindir/normalization.fst \
         "$valid_feats" ark,s,cs:- "$valid_targets" "ark:$dir/valid_all.cegs" || exit 1
@@ -405,7 +418,7 @@ if [ $stage -le 2 ]; then
       lattice-align-phones --replace-output-symbols=true $latdir/final.mdl scp:- ark:- \| \
       chain-get-supervision $chain_supervision_all_opts \
         $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
-      nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets\
+      nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets --target-clean=$target_clean\
         $egs_opts --normalization-fst-scale=$normalization_fst_scale \
         $trans_mdl_opt $chaindir/normalization.fst \
         "$train_subset_feats" ark,s,cs:- "$train_subset_targets" "ark:$dir/train_subset_all.cegs" || exit 1
@@ -472,7 +485,7 @@ if [ $stage -le 4 ]; then
       "$lats_rspecifier" ark:- \| \
     chain-get-supervision $chain_supervision_all_opts \
       $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
-    nnet3-chain-get-egs-dcae $ivector_opts --srand=\$[JOB+$srand] $egs_opts --num-targets=$num_targets \
+    nnet3-chain-get-egs-dcae $ivector_opts --srand=\$[JOB+$srand] $egs_opts --num-targets=$num_targets --target-clean=$target_clean \
       --num-frames-overlap=$frames_overlap_per_eg $trans_mdl_opt \
      "$feats" ark,s,cs:- "$targets" ark:- \| \
     nnet3-chain-copy-egs --random=true --srand=\$[JOB+$srand] ark:- $egs_list || exit 1;

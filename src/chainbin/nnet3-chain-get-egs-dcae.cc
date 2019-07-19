@@ -18,6 +18,7 @@
 // limitations under the License.
 
 #include <sstream>
+#include <string>
 
 #include "base/kaldi-common.h"
 #include "util/common-utils.h"
@@ -428,20 +429,32 @@ int main(int argc, char *argv[]) {
 
     for (; !feat_reader.Done(); feat_reader.Next()) {
       std::string key = feat_reader.Key();
+      std::string target_key;
+      if (target_clean) {
+        target_key.append(key, 0, 6);
+        for (int i = 6; i < key.length(); i++) {
+          if (key[i] == '-')
+            break;
+          else
+            target_key.append(key, i, 1);
+        }
+        KALDI_WARN << "Original key " << key;
+        KALDI_WARN << "Clean key " << target_key;
+      } else {
+        target_key.append(key);
+      }
+
       const GeneralMatrix &feats = feat_reader.Value();
       if (!supervision_reader.HasKey(key)) {
         KALDI_WARN << "No pdf-level posterior for key " << key;
         num_err++;
-      } else if (!matrix_reader.HasKey(key)) {  // get-egs-dense-targets
+      } else if (!matrix_reader.HasKey(target_key)) {  // get-egs-dense-targets
         KALDI_WARN << "No target matrix for key " << key;
         num_err++;
       } else {
         const chain::Supervision &supervision = supervision_reader.Value(key);
-        const Matrix<BaseFloat> &target_matrix;  // get-egs-dense-targets
-        if (target_clean) {
-          &target_matrix = matrix_reader.Value(key);
-        }
-        else &target_matrix = matrix_reader.Value(key);
+        const Matrix<BaseFloat> &target_matrix = matrix_reader.Value(target_key);  // get-egs-dense-targets
+
         const Matrix<BaseFloat> *online_ivector_feats = NULL;
         if (!online_ivector_rspecifier.empty()) {
           if (!online_ivector_reader.HasKey(key)) {
