@@ -216,8 +216,8 @@ void GetComputationRequest(const Nnet &nnet,
     int32 node_index = nnet.GetNodeIndex(name);
     KALDI_LOG << "node_index = " << node_index
         << "name = " << name;
-    if (node_index == -1 &&
-        !nnet.IsInputNode(node_index) && !nnet.IsOutputNode(node_index))
+    if (node_index == -1 ||
+        (!nnet.IsInputNode(node_index) && !nnet.IsOutputNode(node_index)))
       KALDI_ERR << "Nnet example has input or output named '" << name
                 << "', but no such input or output node is in the network.";
 

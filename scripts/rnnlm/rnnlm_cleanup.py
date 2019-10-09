@@ -86,8 +86,7 @@ def get_compute_prob_info(log_file):
         if "# Ended" in line:
             compute_prob_done = True
     if objf == -2000:
-        pass
-	#print(script_name + ": warning: could not parse objective function from " + log_file, file=sys.stderr)
+        print(script_name + ": warning: could not parse objective function from " + log_file, file=sys.stderr)
     return iteration, objf, compute_prob_done
 
 
@@ -159,4 +158,3 @@ if args.keep_latest:
     keep_latest(iterations)
 else:
     keep_best(iterations)
-
