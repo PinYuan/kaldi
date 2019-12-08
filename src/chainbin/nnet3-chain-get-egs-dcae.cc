@@ -218,6 +218,7 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
     NnetIo input_io("input", -chunk.left_context, input_frames);
     nnet_chain_eg.inputs[0].Swap(&input_io);
 
+    // KALDI_WARN << "input " << input_frames;
     if (ivector_feats != NULL) {
       // if applicable, add the iVector feature.
       // choose iVector from a random frame in the chunk
@@ -251,7 +252,7 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
       this_target_dest.CopyFromVec(this_target_src);
     }
 
-    // KALDI_WARN << targets_part;
+    // KALDI_WARN << "target " << targets_part;
 
     // push this created targets matrix into the eg
     NnetIo dcae_io("output_ae", 0, targets_part, frame_subsampling_factor);
@@ -429,19 +430,40 @@ int main(int argc, char *argv[]) {
 
     for (; !feat_reader.Done(); feat_reader.Next()) {
       std::string key = feat_reader.Key();
-      std::string target_key;
+      // std::string target_key;
+      std::string target_key = feat_reader.Key();
       if (target_clean) {
-        target_key.append(key, 0, 6);
-        for (int i = 6; i < key.length(); i++) {
-          if (key[i] == '-')
-            break;
-          else
-            target_key.append(key, i, 1);
-        }
+        // // for matbn
+        // target_key.append(key, 0, 6);
+        // for (int i = 6; i < key.length(); i++) {
+        //   if (key[i] == '-')
+        //     break;
+        //   else
+        //     target_key.append(key, i, 1);
+        // }
+
+        // for aurora4
+        target_key[target_key.length() - 1] = '0';
+
+        // for chime4
+        // char *token;
+        // char *strs = new char[key.length() + 1];  //不要忘了
+        // strcpy(strs, key.c_str());
+        // token = strtok(strs, "_");
+        // while (token != NULL) {
+        //   if (strlen(token) == 8) {
+        //     for (int i = 0; i < strlen(token); i++) token[i] =
+        //     tolower(token[i]); target_key = std::string(token);
+        //     break;
+        //   }
+        //   KALDI_WARN << "Token " << token;
+        //   token = strtok(NULL, "_");
+        // }
+
         KALDI_WARN << "Original key " << key;
         KALDI_WARN << "Clean key " << target_key;
       } else {
-        target_key.append(key);
+        KALDI_WARN << "Clean key " << target_key;
       }
 
       const GeneralMatrix &feats = feat_reader.Value();
@@ -449,7 +471,7 @@ int main(int argc, char *argv[]) {
         KALDI_WARN << "No pdf-level posterior for key " << key;
         num_err++;
       } else if (!matrix_reader.HasKey(target_key)) {  // get-egs-dense-targets
-        KALDI_WARN << "No target matrix for key " << key;
+        KALDI_WARN << "No target matrix for key " << target_key;
         num_err++;
       } else {
         const chain::Supervision &supervision = supervision_reader.Value(key);

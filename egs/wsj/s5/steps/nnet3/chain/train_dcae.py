@@ -182,6 +182,8 @@ def get_args():
     parser.add_argument("--lat-dir", type=str, required=True,
                         help="Directory with numerator lattices "
                         "used for training the neural network.")
+    parser.add_argument("--target_scp", type=str, required=True,
+                        help="Directory with target_scp for DcAE decoder")
     parser.add_argument("--dir", type=str, required=True,
                         help="Directory to store the models and "
                         "all other files.")
@@ -427,7 +429,7 @@ def train(args, run_opts):
                 frames_per_eg_str=str(args.chunk_width), 
                 target_clean=args.target_clean,
                 srand=args.srand,
-                data_dir=args.feat_dir, dir=args.dir, lat_dir=args.lat_dir, target_scp=args.feat_dir+"/feats.scp", egs_dir=default_egs_dir))
+                data_dir=args.feat_dir, dir=args.dir, lat_dir=args.lat_dir, target_scp=args.target_scp, egs_dir=default_egs_dir))
 
     if args.egs_dir is None:
         egs_dir = default_egs_dir
