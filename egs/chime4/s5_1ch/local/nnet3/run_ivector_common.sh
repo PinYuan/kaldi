@@ -63,7 +63,7 @@ if [ $stage -le 2 ]; then
 
   # do volume-perturbation on the training data prior to extracting hires
   # features; this helps make trained nnets more invariant to test data volume.
-  utils/data/perturb_data_dir_volume.sh data/${train_set}_sp_hires
+  utils/data/perturb_data_dir_volume.sh data/${datadir}_hires
 
   for datadir in ${train_set}_sp ${test_sets}; do
     steps/make_mfcc.sh --nj $nj --mfcc-config conf/mfcc_hires.conf \

@@ -20,7 +20,8 @@ fi
 
 # check data directories
 chime4_data=$1
-wsj0_data=$chime4_data/data/WSJ0 # directory of WSJ0 in Chime4. You can also specify your WSJ0 corpus directory
+# wsj0_data=$chime4_data/data/WSJ0 # directory of WSJ0 in Chime4. You can also specify your WSJ0 corpus directory
+wsj0_data=/mnt/md0/Corpora/WSJ/WSJ0/11-13.1 # directory of WSJ0 in Chime4. You can also specify your WSJ0 corpus directory
 if [ ! -d $chime4_data ]; then
   echo "$chime4_data does not exist. Please specify chime4 data root correctly" && exit 1
 fi

@@ -1,0 +1,1 @@
+/mnt/md0/user_pthuang508/Kaldi/egs/wsj/s5/local/wsj_data_prep.sh

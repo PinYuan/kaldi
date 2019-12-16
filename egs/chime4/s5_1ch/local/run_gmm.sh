@@ -14,7 +14,7 @@
 
 # Config:
 nj=30
-stage=0 # resume training with --stage=N
+stage=3 # resume training with --stage=N
 train=noisy # noisy data multi-condition training
 eval_flag=true # make it true when the evaluation data are released
 add_enhanced_data=true # make it true when you want to add enhanced data into training set
@@ -127,15 +127,15 @@ mfccdir=mfcc
 if [ $stage -le 3 ]; then
   if $add_enhanced_data; then
     if $eval_flag; then
-      tasks="tr05_real_${train} dt05_real_${train} tr05_simu_${train} dt05_simu_${train} et05_real_${train} et05_simu_${train} tr05_real_$enhan tr05_simu_$enhan"
+      tasks="tr05_real_${train} dt05_real_${train} tr05_simu_${train} dt05_simu_${train} et05_real_${train} et05_simu_${train} tr05_real_$enhan tr05_simu_$enhan tr05_orig_clean"
     else
-      tasks="tr05_real_${train} dt05_real_${train} tr05_simu_${train} dt05_simu_${train} tr05_real_$enhan tr05_simu_$enhan"
+      tasks="tr05_real_${train} dt05_real_${train} tr05_simu_${train} dt05_simu_${train} tr05_real_$enhan tr05_simu_$enhan tr05_orig_clean"
     fi
   else
     if $eval_flag; then
-      tasks="tr05_real_${train} dt05_real_${train} tr05_simu_${train} dt05_simu_${train} et05_real_${train} et05_simu_${train}"
+      tasks="tr05_real_${train} dt05_real_${train} tr05_simu_${train} dt05_simu_${train} et05_real_${train} et05_simu_${train} tr05_orig_clean"
     else
-      tasks="tr05_real_${train} dt05_real_${train} tr05_simu_${train} dt05_simu_${train}"
+      tasks="tr05_real_${train} dt05_real_${train} tr05_simu_${train} dt05_simu_${train} tr05_orig_clean"
     fi
   fi
   for x in $tasks; do

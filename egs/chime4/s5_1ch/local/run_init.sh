@@ -32,7 +32,9 @@ fi
 
 # clean data
 chime4_data=$1
-wsj0_data=$chime4_data/data/WSJ0 # directory of WSJ0 in Chime4. You can also specify your WSJ0 corpus directory
+# wsj0_data=$chime4_data/data/WSJ0 # directory of WSJ0 in Chime4. You can also specify your WSJ0 corpus directory
+wsj0_data=/mnt/md0/Corpora/WSJ/WSJ0 # directory of WSJ0 in Chime4. You can also specify your WSJ0 corpus directory
+wsj1=/mnt/md0/Corpora/WSJ/WSJ1
 
 # Set bash to 'debug' mode, it will exit on :
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
@@ -43,7 +45,8 @@ set -o pipefail
 if [ $stage -le 0 ]; then
   # process for clean speech and making LMs etc. from original WSJ0
   # note that training on clean data means original WSJ0 data only (no booth data)
-  local/clean_wsj0_data_prep.sh $wsj0_data
+#   local/clean_wsj0_data_prep.sh $wsj0_data
+  local/wsj_data_prep.sh $wsj0_data/??-{?,??}.? $wsj1/??-{?,??}.? || exit 1;
   local/wsj_prepare_dict.sh
   utils/prepare_lang.sh data/local/dict "<SPOKEN_NOISE>" data/local/lang_tmp data/lang
   local/clean_chime4_format_data.sh
