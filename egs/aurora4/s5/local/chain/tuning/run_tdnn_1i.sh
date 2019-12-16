@@ -1,29 +1,36 @@
 #!/bin/bash
 
-# 1a is same as 1h setup in WSJ
+# 1i is like 1h, while it introduces 'apply-cmvn-online' that does
+# cmn normalization both for i-extractor and TDNN input.
 
-# local/chain/compare_wer.sh exp/chain/tdnn1a_sp
-# System                  tdnn1a_sp
-# WER eval92 (tgpr_5k)       7.67
-# WER 0166 (tgpr_5k)         7.88
-# Final train prob        -0.0338
-# Final valid prob        -0.0602
-# Final train prob (xent)   -0.7632
-# Final valid prob (xent)   -0.9377
-# Num-params                 8315264
+# local/chain/compare_wer.sh exp/chain/tdnn1h_sp exp/chain_online_cmn/tdnn1i_sp
+# System                tdnn1h_sp tdnn1i_sp
+#WER dev93 (tgpr)                6.89      6.90
+#WER dev93 (tg)                  6.63      6.73
+#WER dev93 (big-dict,tgpr)       4.96      4.91
+#WER dev93 (big-dict,fg)         4.53      4.44
+#WER eval92 (tgpr)               4.68      4.77
+#WER eval92 (tg)                 4.32      4.36
+#WER eval92 (big-dict,tgpr)      2.69      2.85
+#WER eval92 (big-dict,fg)        2.34      2.36
+# Final train prob        -0.0442   -0.0436
+# Final valid prob        -0.0537   -0.0540
+# Final train prob (xent)   -0.6548   -0.6592
+# Final valid prob (xent)   -0.7324   -0.7326
+# Num-params                 8349232   8349232
 
-# steps/info/chain_dir_info.pl exp/chain/tdnn1a_sp
-# exp/chain/tdnn1a_sp: num-iters=24 nj=2..8 num-params=8.3M dim=40+100->2752 combine=-0.034->-0.034 (over 1) xent:train/valid[15,23,final]=(-1.13,-0.809,-0.763/-1.16,-0.961,-0.938) logprob:train/valid[15,23,final]=(-0.063,-0.038,-0.034/-0.068,-0.062,-0.060)
+# steps/info/chain_dir_info.pl exp/chain_online_cmn/tdnn1i_sp
+# exp/chain_online_cmn/tdnn1i_sp: num-iters=108 nj=2..8 num-params=8.3M dim=40+100->2840 combine=-0.045->-0.045 (over 1) xent:train/valid[71,107,final]=(-0.873,-0.653,-0.659/-0.922,-0.713,-0.733) logprob:train/valid[71,107,final]=(-0.064,-0.044,-0.044/-0.068,-0.054,-0.054)
 
 set -e -o pipefail
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=9
+stage=0
 nj=30
 train_set=train_si84_multi
-test_sets="test_0166 test_eval92"
-gmm=tri3b_multi        # this is the source gmm-dir that we'll use for alignments; it
+test_sets="test_eval92 test_0166"
+gmm=tri4b_multi        # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
 
 num_threads_ubm=8
@@ -33,12 +40,20 @@ nj_extractor=10
 num_threads_extractor=4
 num_processes_extractor=2
 
-nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
+nnet3_affix=_online_cmn   # affix for exp dirs, e.g. it was _cleaned in tedlium.
 
 # Options which are not passed through to run_ivector_common.sh
-affix=1a   #affix for TDNN+LSTM directory e.g. "1a" or "1b", in case we change the configuration.
+affix=1i   #affix for TDNN+LSTM directory e.g. "1a" or "1b", in case we change the configuration.
 common_egs_dir=
 reporting_email=
+
+# Setting 'online_cmvn' to true replaces 'apply-cmvn' by
+# 'apply-cmvn-online' both for i-vector extraction and TDNN input.
+# The i-vector extractor uses the config 'conf/online_cmvn.conf' for
+# both the UBM and the i-extractor. The TDNN input is configured via
+# '--feat.cmvn-opts' that is set to the same config, so we use the
+# same cmvn for i-extractor and the TDNN input.
+online_cmvn=true
 
 # LSTM/chain options
 train_stage=-10
@@ -53,7 +68,7 @@ chunk_right_context=0
 
 # training options
 srand=0
-remove_egs=false
+remove_egs=true
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -78,12 +93,14 @@ fi
 local/nnet3/run_ivector_common.sh \
   --stage $stage --nj $nj \
   --train-set $train_set --gmm $gmm \
-  --test-sets $test_sets \
+  --online-cmvn-iextractor $online_cmvn \
   --num-threads-ubm $num_threads_ubm \
   --nj-extractor $nj_extractor \
   --num-processes-extractor $num_processes_extractor \
   --num-threads-extractor $num_threads_extractor \
   --nnet3-affix "$nnet3_affix"
+
+
 
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
@@ -109,7 +126,7 @@ for f in $train_data_dir/feats.scp $train_ivector_dir/ivector_online.scp \
 done
 
 
-if [ $stage -le 9 ]; then
+if [ $stage -le 12 ]; then
   echo "$0: creating lang directory $lang with chain-type topology"
   # Create a version of the lang/ directory that has one state per phone in the
   # topo file. [note, it really has two states.. the first one is only repeated
@@ -132,7 +149,7 @@ if [ $stage -le 9 ]; then
   fi
 fi
 
-if [ $stage -le 10 ]; then
+if [ $stage -le 13 ]; then
   # Get the alignments as lattices (gives the chain training more freedom).
   # use the same num-jobs as the alignments
   steps/align_fmllr_lats.sh --nj 100 --cmd "$train_cmd" ${lores_train_data_dir} \
@@ -140,7 +157,7 @@ if [ $stage -le 10 ]; then
   rm $lat_dir/fsts.*.gz # save space
 fi
 
-if [ $stage -le 11 ]; then
+if [ $stage -le 14 ]; then
   # Build a tree using our new topology.  We know we have alignments for the
   # speed-perturbed data (local/nnet3/run_ivector_common.sh made them), so use
   # those.  The num-leaves is always somewhat less than the num-leaves from
@@ -156,7 +173,8 @@ if [ $stage -le 11 ]; then
     $lang $ali_dir $tree_dir
 fi
 
-if [ $stage -le 12 ]; then
+
+if [ $stage -le 15 ]; then
   mkdir -p $dir
   echo "$0: creating neural net configs using the xconfig parser";
 
@@ -204,16 +222,16 @@ EOF
 fi
 
 
-if [ $stage -le 13 ]; then
+if [ $stage -le 16 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then
     utils/create_split_dir.pl \
      /export/b0{3,4,5,6}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
   steps/nnet3/chain/train.py --stage=$train_stage \
-    --cmd="$train_cmd" \
+    --cmd="$decode_cmd" \
     --feat.online-ivector-dir=$train_ivector_dir \
-    --feat.cmvn-opts="--norm-means=false --norm-vars=false" \
+    --feat.cmvn-opts="--config=conf/online_cmvn.conf" \
     --chain.xent-regularize $xent_regularize \
     --chain.leaky-hmm-coefficient=0.1 \
     --chain.l2-regularize=0.0 \
@@ -235,7 +253,7 @@ if [ $stage -le 13 ]; then
     --egs.chunk-left-context=0 \
     --egs.chunk-right-context=0 \
     --egs.dir="$common_egs_dir" \
-    --egs.opts="--frames-overlap-per-eg 0" \
+    --egs.opts="--frames-overlap-per-eg 0 --online-cmvn $online_cmvn" \
     --cleanup.remove-egs=$remove_egs \
     --use-gpu=wait \
     --reporting.email="$reporting_email" \
@@ -245,7 +263,7 @@ if [ $stage -le 13 ]; then
     --dir=$dir  || exit 1;
 fi
 
-if [ $stage -le 14 ]; then
+if [ $stage -le 17 ]; then
   # The reason we are using data/lang here, instead of $lang, is just to
   # emphasize that it's not actually important to give mkgraph.sh the
   # lang directory with the matched topology (since it gets the
@@ -254,33 +272,87 @@ if [ $stage -le 14 ]; then
   # as long as phones.txt was compatible.
 
   utils/lang/check_phones_compatible.sh \
-    data/lang_test_tgpr_5k/phones.txt $lang/phones.txt
+    data/lang_test_tgpr/phones.txt $lang/phones.txt
   utils/mkgraph.sh \
-    --self-loop-scale 1.0 data/lang_test_tgpr_5k \
-    $tree_dir $tree_dir/graph_tgpr_5k || exit 1;
+    --self-loop-scale 1.0 data/lang_test_tgpr \
+    $tree_dir $tree_dir/graph_tgpr || exit 1;
 
+#  utils/lang/check_phones_compatible.sh \
+#    data/lang_test_bd_tgpr/phones.txt $lang/phones.txt
+#  utils/mkgraph.sh \
+#    --self-loop-scale 1.0 data/lang_test_bd_tgpr \
+#    $tree_dir $tree_dir/graph_bd_tgpr || exit 1;
 fi
 
-if [ $stage -le 15 ]; then
+if [ $stage -le 18 ]; then
   frames_per_chunk=$(echo $chunk_width | cut -d, -f1)
   rm $dir/.error 2>/dev/null || true
 
-  for data in ${test_sets}; do
-    data_affix=$(echo $data | sed s/test_//)
-    nspk=$(wc -l <data/${data}_hires/spk2utt)
-    for lmtype in tgpr_5k; do
-      steps/nnet3/decode.sh \
-        --acwt 1.0 --post-decode-acwt 10.0 \
-        --extra-left-context 0 --extra-right-context 0 \
-        --extra-left-context-initial 0 \
-        --extra-right-context-final 0 \
-        --frames-per-chunk $frames_per_chunk \
-        --nj $nspk --cmd "$decode_cmd"  --num-threads 4 \
-        --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${data}_hires \
-        $tree_dir/graph_${lmtype} data/${data}_hires ${dir}/decode_${lmtype}_${data_affix} || exit 1
-    done
+  for data in $test_sets; do
+    (
+      data_affix=$(echo $data | sed s/test_//)
+      nspk=$(wc -l <data/${data}_hires/spk2utt)
+      for lmtype in tgpr; do
+        steps/nnet3/decode.sh \
+          --acwt 1.0 --post-decode-acwt 10.0 \
+          --extra-left-context 0 --extra-right-context 0 \
+          --extra-left-context-initial 0 \
+          --extra-right-context-final 0 \
+          --frames-per-chunk $frames_per_chunk \
+          --nj $nspk --cmd "$decode_cmd"  --num-threads 4 \
+          --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${data}_hires \
+          $tree_dir/graph_${lmtype} data/${data}_hires ${dir}/decode_${lmtype}_${data_affix} || exit 1
+      done
+      steps/lmrescore.sh \
+        --self-loop-scale 1.0 \
+        --cmd "$decode_cmd" data/lang_test_{tgpr,tg} \
+        data/${data}_hires ${dir}/decode_{tgpr,tg}_${data_affix} || exit 1
+#      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
+#        data/lang_test_bd_{tgpr,fgconst} \
+#       data/${data}_hires ${dir}/decode_${lmtype}_${data_affix}{,_fg} || exit 1
+    ) || touch $dir/.error &
   done
+  wait
   [ -f $dir/.error ] && echo "$0: there was a problem while decoding" && exit 1
 fi
+
+# Not testing the 'looped' decoding separately, because for
+# TDNN systems it would give exactly the same results as the
+# normal decoding.
+
+if $test_online_decoding && [ $stage -le 19 ]; then
+  # note: if the features change (e.g. you add pitch features), you will have to
+  # change the options of the following command line.
+  steps/online/nnet3/prepare_online_decoding.sh \
+    --mfcc-config conf/mfcc_hires.conf \
+    $lang exp/nnet3${nnet3_affix}/extractor ${dir} ${dir}_online
+
+  rm $dir/.error 2>/dev/null || true
+
+  for data in $test_sets; do
+    (
+      data_affix=$(echo $data | sed s/test_//)
+      nspk=$(wc -l <data/${data}_hires/spk2utt)
+      # note: we just give it "data/${data}" as it only uses the wav.scp, the
+      # feature type does not matter.
+      for lmtype in tgpr; do
+        steps/online/nnet3/decode.sh \
+          --acwt 1.0 --post-decode-acwt 10.0 \
+          --nj $nspk --cmd "$decode_cmd" \
+          $tree_dir/graph_${lmtype} data/${data} ${dir}_online/decode_${lmtype}_${data_affix} || exit 1
+      done
+      steps/lmrescore.sh \
+        --self-loop-scale 1.0 \
+        --cmd "$decode_cmd" data/lang_test_{tgpr,tg} \
+        data/${data}_hires ${dir}_online/decode_{tgpr,tg}_${data_affix} || exit 1
+#      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
+#        data/lang_test_bd_{tgpr,fgconst} \
+#       data/${data}_hires ${dir}_online/decode_${lmtype}_${data_affix}{,_fg} || exit 1
+    ) || touch $dir/.error &
+  done
+  wait
+  [ -f $dir/.error ] && echo "$0: there was a problem while decoding" && exit 1
+fi
+
 
 exit 0;

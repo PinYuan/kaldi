@@ -54,21 +54,11 @@ cat $AURORA/lists/training_multicondition_16k.list \
 #Dev Set
 for x in $(seq -f "%02g" 01 14); do
   # Dev-set 1 (330x14 utterances)
-  cat $AURORA/lists/devtest${x}_0330_16k.list | perl -e ' 
-    while(<STDIN>) {
-      @A=split("/", $_);        
-      @B=split("_", $A[0]);
-      print $B[0].$B[1]."_".$B[2]."/".$_;  
-    }
-  ' | $local/aurora2flist.pl $AURORA | sort -u > dev_0330_${x}.flist
+  cat $AURORA/lists/devtest${x}_0330_16k.list \
+    | $local/aurora2flist.pl $AURORA | sort -u > dev_0330_${x}.flist
   # Dev-set 2 (1206x14 utterances)
-  cat $AURORA/lists/devtest${x}_1206_16k.list | perl -e '
-    while(<STDIN>) {
-      @A=split("/", $_);        
-      @B=split("_", $A[0]);
-      print $B[0].$B[1]."_".$B[2]."/".$_;  
-    }
-  ' | $local/aurora2flist.pl $AURORA | sort -u > dev_1206_${x}.flist
+  cat $AURORA/lists/devtest${x}_1206_16k.list \
+    | $local/aurora2flist.pl $AURORA | sort -u > dev_1206_${x}.flist
 done
 
 #Test Set
@@ -99,7 +89,7 @@ x=train_si84_multi
 $local/flist2scp_12.pl $x.flist | sort > ${x}_sph_tmp.scp
 cat ${x}_sph_tmp.scp | awk '{print $1}' \
   | $local/find_transcripts.pl dot_files.flist > ${x}_tmp.trans1
-cat ${x}_sph_tmp.scp | awk '{printf("%s1 %s\n", $1, $2);}' | grep -v '408o0302\.wv2$'> ${x}_sph.scp
+cat ${x}_sph_tmp.scp | awk '{printf("%s1 %s\n", $1, $2);}' > ${x}_sph.scp
 cat ${x}_tmp.trans1 | awk '{printf("%s1 ", $1); for(i=2;i<=NF;i++) printf("%s ", $i); printf("\n");}' \
   | sort -u > ${x}.trans1
 

@@ -17,10 +17,10 @@ online_cmvn_iextractor=false
 
 num_threads_ubm=32
 
-nj_extractor=10
+nj_extractor=5
 # It runs a JOB with '-pe smp N', where N=$[threads*processes]
-num_processes_extractor=4
-num_threads_extractor=4
+num_processes_extractor=2
+num_threads_extractor=2
 
 nnet3_affix=             # affix for exp/nnet3 directory to put iVector stuff in (e.g.
                          # in the tedlium recip it's _cleaned).
