@@ -144,6 +144,8 @@ static void MergeIo(const std::vector<NnetExample> &src,
         output_iter[i].n = n;
       }
       this_offset += this_size;  // note: this_offset is a reference.
+
+      output_io.frame_weights = io.frame_weights;
     }
   }
   KALDI_ASSERT(cur_size == sizes);

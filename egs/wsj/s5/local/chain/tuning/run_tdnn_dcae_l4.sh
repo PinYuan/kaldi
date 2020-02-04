@@ -50,9 +50,10 @@ chunk_width=140,100,160
 # we don't need extra left/right context for TDNN systems.
 chunk_left_context=0
 chunk_right_context=0
-num_of_epoch=12
-weight=0.0000000001
+num_of_epoch=10
+weight=1
 target_clean=false
+frame_weight=0.0000001
 
 # training options
 srand=0
@@ -89,7 +90,7 @@ local/nnet3/run_ivector_common.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/tdnn${affix}_e${num_of_epoch}_sp/$weight
+dir=exp/chain${nnet3_affix}/tdnn${affix}_e${num_of_epoch}_sp/$frame_weight
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp
@@ -166,6 +167,11 @@ if [ $stage -le 15 ]; then
 
   num_targets=$(tree-info $tree_dir/tree |grep num-pdfs|awk '{print $2}')
   learning_rate_factor=$(echo "print 0.5/$xent_regularize" | python)
+  # tdnn_opts="l2-regularize=0.0 dropout-proportion=0.0 dropout-per-dim-continuous=true"
+  # tdnnf_opts="l2-regularize=0.0 dropout-proportion=0.0 bypass-scale=0.66"
+  # linear_opts="l2-regularize=0.0 orthonormal-constraint=-1.0"
+  # prefinal_opts="l2-regularize=0.0"
+  # output_opts="l2-regularize=0.0"
   tdnn_opts="l2-regularize=0.01 dropout-proportion=0.0 dropout-per-dim-continuous=true"
   tdnnf_opts="l2-regularize=0.01 dropout-proportion=0.0 bypass-scale=0.66"
   linear_opts="l2-regularize=0.01 orthonormal-constraint=-1.0"
@@ -209,7 +215,7 @@ if [ $stage -le 15 ]; then
   relu-batchnorm-layer name=tdnn2 input=Append(0, tdnnf13) dim=1024
   relu-batchnorm-layer name=tdnn3 dim=1024
   relu-batchnorm-layer name=tdnn4 dim=1024
-  output-layer name=output_ae include-log-softmax=false learning-rate-factor=$weight max-change=1.0 objective-type=quadratic input=tdnn4 dim=40
+  output-layer name=output_ae include-log-softmax=false learning-rate-factor=1 objective-type=quadratic input=tdnn4 dim=40
 
 
 EOF
@@ -233,6 +239,7 @@ if [ $stage -le 16 ]; then
     --chain.apply-deriv-weights=false \
     --chain.lm-opts="--num-extra-lm-states=2000" \
     --trainer.dropout-schedule $dropout_schedule \
+    --trainer.add-option="--optimization.memory-compression-level=2" \
     --trainer.srand=$srand \
     --trainer.max-param-change=2.0 \
     --trainer.num-epochs=$num_of_epoch \
@@ -245,6 +252,7 @@ if [ $stage -le 16 ]; then
     --trainer.optimization.momentum=0.0 \
     --egs.chunk-width=$chunk_width \
     --egs.target-clean=$target_clean \
+    --egs.frame-weight=$frame_weight \
     --egs.chunk-left-context=0 \
     --egs.chunk-right-context=0 \
     --egs.dir="$common_egs_dir" \

@@ -276,7 +276,7 @@ void NnetChainTrainer::ProcessOutputs(bool is_backstitch_step2,
       ObjectiveType obj_type = nnet_->GetNode(node_index).u.objective_type;
       BaseFloat tot_weight, tot_objf;
       bool supply_deriv = true;
-      ComputeObjectiveFunction(io.features, obj_type, io.name, supply_deriv,
+      ComputeObjectiveFunction(io.features, obj_type, io.name, io.frame_weights, supply_deriv,
                                computer, &tot_weight, &tot_objf);
       objf_info_[io.name + suffix].UpdateStats(
           io.name + suffix, opts_.nnet_config.print_interval,num_minibatches_processed_,

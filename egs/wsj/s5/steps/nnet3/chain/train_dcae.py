@@ -63,6 +63,10 @@ def get_args():
                         help="""For dcae training with multi-condition data. Set 
                         to true if you wish the target for the autoencoder output 
                         is the clean version of the input data.""")
+    parser.add_argument("--egs.frame-weight", type=float, dest='frame_weight',
+                        default=1.0,
+                        help="""For dcae training with multi-condition data. Set 
+                        weight of output_ae loss""")
 
     # chain options
     parser.add_argument("--chain.lm-opts", type=str, dest='lm_opts',
@@ -408,6 +412,7 @@ def train(args, run_opts):
                 --frames-per-iter {frames_per_iter} \
                 --frames-per-eg {frames_per_eg_str} \
                 --target-clean {target_clean} \
+                --frame-weight {frame_weight} \
                 --srand {srand} \
                 --generate-egs-scp true \
                 {data_dir} {dir} {lat_dir} {target_scp} {egs_dir}""".format(
@@ -428,6 +433,7 @@ def train(args, run_opts):
                 stage=args.egs_stage, frames_per_iter=args.frames_per_iter,
                 frames_per_eg_str=str(args.chunk_width), 
                 target_clean=args.target_clean,
+                frame_weight=args.frame_weight,
                 srand=args.srand,
                 data_dir=args.feat_dir, dir=args.dir, lat_dir=args.lat_dir, target_scp=args.target_scp, egs_dir=default_egs_dir))
 

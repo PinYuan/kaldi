@@ -312,16 +312,25 @@ void MergeChainExamples(bool compress,
   // Now deal with the DcAE 'outputs_ae'.  There will
   // normally be just one of these, with name "output_ae", but we
   // handle the more general case.
-  num_output_names = (*input)[0].outputs_ae.size();
-  output->outputs_ae.resize(num_output_names);
-  for (int32 i = 0; i < num_examples; i++)
-    eg_inputs[i].io.swap((*input)[i].outputs_ae);
-  MergeExamples(eg_inputs, compress, &eg_output);
-  // swap the outputs_ae back so that they are not really changed.
-  for (int32 i = 0; i < num_examples; i++)
-    eg_inputs[i].io.swap((*input)[i].outputs_ae);
-  // write to 'output->outputs_ae'
-  eg_output.io.swap(output->outputs_ae);
+  int32 num_output_ae_size = (*input)[0].outputs_ae.size();
+  output->outputs_ae.resize(num_output_ae_size);
+  for (int32 i = 0; i < num_output_ae_size; i++) {
+    std::vector<NnetExample> eg_outputs_ae(num_examples);
+    for (int32 j = 0; j < num_examples; j++) {
+      eg_outputs_ae[j].io.resize(1);
+      eg_outputs_ae[j].io[0].Swap(&((*input)[j].outputs_ae[i]));
+      }
+    
+    NnetExample output_ae_out;
+    MergeExamples(eg_outputs_ae, compress, &output_ae_out);
+    // swap the outputs_ae back so that they are not really changed.
+    for (int32 j = 0; j < num_examples; j++) {
+      eg_outputs_ae[j].io.resize(1);
+      eg_outputs_ae[j].io[0].Swap(&((*input)[j].outputs_ae[i]));
+    }
+    // write to 'output->outputs_ae'
+    output_ae_out.io[0].Swap(&(output->outputs_ae[i]));
+  }
 }
 
 void GetChainComputationRequest(const Nnet &nnet,

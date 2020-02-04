@@ -101,6 +101,7 @@ reduce_frames_per_eg=true  # If true, this script may reduce the frames_per_eg
 target_clean=false  #For dcae training with multi-condition data. Set 
                     #to true if you wish the target for the autoencoder output 
                     #is the clean version of the input data.
+frame_weight=1.0  #Sets weight of output_ae loss
 
 echo "$0 $@"  # Print the command line for logging
 
@@ -183,25 +184,29 @@ mkdir -p $dir/log $dir/info
 # Get list of validation utterances.
 frame_shift=$(utils/data/get_frame_shift.sh $data) || exit 1
 
-awk '{print $1}' $data/utt2spk | \
-  utils/shuffle_list.pl 2>/dev/null | head -$num_utts_subset > $dir/valid_uttlist
+# awk '{print $1}' $data/utt2spk | \
+#   utils/shuffle_list.pl 2>/dev/null | head -$num_utts_subset > $dir/valid_uttlist
+
+if [ -f $data/utt2uniq ]; then
+  # Must hold out all augmented versions of the same utterance.
+  echo "$0: File $data/utt2uniq exists, so ensuring the hold-out set" \
+       "includes all perturbed versions of the same source utterance."
+  utils/utt2spk_to_spk2utt.pl $data/utt2uniq 2>/dev/null | \
+      utils/shuffle_list.pl 2>/dev/null | \
+    awk -v max_utt=$num_utts_subset '{
+        for (n=2;n<=NF;n++) print $n;
+        printed += NF-1;
+        if (printed >= max_utt) exit(0); }' |
+    sort > $dir/valid_uttlist
+else
+  awk '{print $1}' $data/utt2spk | \
+    utils/shuffle_list.pl 2>/dev/null | \
+    head -$num_utts_subset > $dir/valid_uttlist
+fi
 
 len_uttlist=$(wc -l < $dir/valid_uttlist)
 if [ $len_uttlist -lt $num_utts_subset ]; then
   echo "Number of utterances is very small. Please check your data." && exit 1;
-fi
-
-if [ -f $data/utt2uniq ]; then  # this matters if you use data augmentation.
-  # because of this stage we can again have utts with lengths less than
-  # frames_per_eg
-  echo "File $data/utt2uniq exists, so augmenting valid_uttlist to"
-  echo "include all perturbed versions of the same 'real' utterances."
-  mv $dir/valid_uttlist $dir/valid_uttlist.tmp
-  utils/utt2spk_to_spk2utt.pl $data/utt2uniq > $dir/uniq2utt
-  cat $dir/valid_uttlist.tmp | utils/apply_map.pl $data/utt2uniq | \
-    sort | uniq | utils/apply_map.pl $dir/uniq2utt | \
-    awk '{for(n=1;n<=NF;n++) print $n;}' | sort  > $dir/valid_uttlist
-  rm $dir/uniq2utt $dir/valid_uttlist.tmp
 fi
 
 if [ $target_clean == "true" ];then
@@ -444,6 +449,7 @@ if [ $stage -le 2 ]; then
       chain-get-supervision $chain_supervision_all_opts $chaindir/tree $chaindir/0.trans_mdl \
         ark:- ark:- \| \
       nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets --target-clean=$target_clean \
+        --frame-weight=$frame_weight \
          $egs_opts --normalization-fst-scale=$normalization_fst_scale \
          $trans_mdl_opt $chaindir/normalization.fst \
         "$valid_feats" ark,s,cs:- "$valid_targets" "ark:$dir/valid_all.cegs" || exit 1
@@ -453,6 +459,7 @@ if [ $stage -le 2 ]; then
       chain-get-supervision $chain_supervision_all_opts \
         $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
       nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets --target-clean=$target_clean\
+        --frame-weight=$frame_weight \
         $egs_opts --normalization-fst-scale=$normalization_fst_scale \
         $trans_mdl_opt $chaindir/normalization.fst \
         "$train_subset_feats" ark,s,cs:- "$train_subset_targets" "ark:$dir/train_subset_all.cegs" || exit 1
@@ -520,6 +527,7 @@ if [ $stage -le 4 ]; then
     chain-get-supervision $chain_supervision_all_opts \
       $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
     nnet3-chain-get-egs-dcae $ivector_opts --srand=\$[JOB+$srand] $egs_opts --num-targets=$num_targets --target-clean=$target_clean \
+      --frame-weight=$frame_weight \
       --num-frames-overlap=$frames_overlap_per_eg $trans_mdl_opt \
      "$feats" ark,s,cs:- "$targets" ark:- \| \
     nnet3-chain-copy-egs --random=true --srand=\$[JOB+$srand] ark:- $egs_list || exit 1;

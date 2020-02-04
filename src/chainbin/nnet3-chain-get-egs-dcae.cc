@@ -96,7 +96,8 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
                         const VectorBase<BaseFloat> *deriv_weights,
                         int32 supervision_length_tolerance,
                         const MatrixBase<BaseFloat> &targets,
-                        int32 num_targets, 
+                        int32 num_targets,
+                        const BaseFloat frame_weight,
                         const std::string &utt_id,
                         bool compress,
                         UtteranceSplitter *utt_splitter,
@@ -255,7 +256,7 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
     // KALDI_WARN << "target " << targets_part;
 
     // push this created targets matrix into the eg
-    NnetIo dcae_io("output_ae", 0, targets_part, frame_subsampling_factor);
+    NnetIo dcae_io("output_ae", 0, targets_part, frame_weight, frame_subsampling_factor);
     nnet_chain_eg.outputs_ae[0].Swap(&dcae_io);
 
     if (compress)
@@ -302,6 +303,7 @@ int main(int argc, char *argv[]) {
     bool compress = true, target_clean = false;
     int32 num_targets = -1, length_tolerance = 100, online_ivector_period = 1,
           supervision_length_tolerance = 1;
+    BaseFloat frame_weight = 1.0;
 
     ExampleGenerationConfig eg_config;  // controls num-frames,
                                         // left/right-context, etc.
@@ -353,6 +355,9 @@ int main(int argc, char *argv[]) {
                 "For dcae training with multi-condition data."
                 "Set to true if you wish the target for the autoencoder output"
                 "is the clean version of the input data.");
+    po.Register("frame-weight", &frame_weight,
+                "For dcae training,"
+                "Set the weight between decoder loss and ASR loss (0~1)");
 
     eg_config.Register(&po);
 
@@ -384,9 +389,6 @@ int main(int argc, char *argv[]) {
       target_matrix_rspecifier = po.GetArg(4),  // get-egs-dense-targets
       examples_wspecifier = po.GetArg(5);
     }
-
-    KALDI_WARN << "input " << feature_rspecifier;
-    KALDI_WARN << "target " << target_matrix_rspecifier;
 
     eg_config.ComputeDerived();
     UtteranceSplitter utt_splitter(eg_config);
@@ -460,10 +462,10 @@ int main(int argc, char *argv[]) {
         //   token = strtok(NULL, "_");
         // }
 
-        KALDI_WARN << "Original key " << key;
-        KALDI_WARN << "Clean key " << target_key;
+        KALDI_LOG << "Original key " << key;
+        KALDI_LOG << "Clean key " << target_key;
       } else {
-        KALDI_WARN << "Clean key " << target_key;
+        KALDI_LOG << "Clean key " << target_key;
       }
 
       const GeneralMatrix &feats = feat_reader.Value();
@@ -516,8 +518,8 @@ int main(int argc, char *argv[]) {
         if (!ProcessFile(
                 trans_mdl_ptr, normalization_fst, feats, online_ivector_feats,
                 online_ivector_period, supervision, deriv_weights,
-                supervision_length_tolerance, target_matrix, num_targets, key,
-                compress, &utt_splitter, &example_writer))
+                supervision_length_tolerance, target_matrix, num_targets, frame_weight,
+                key, compress, &utt_splitter, &example_writer))
           num_err++;
       }
     }
