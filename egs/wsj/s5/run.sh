@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 stage=8
 train=true   # set to false to disable the training-related scripts

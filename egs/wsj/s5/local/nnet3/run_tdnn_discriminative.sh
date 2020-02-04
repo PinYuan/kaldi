@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 set -o pipefail
 set -e
 # this is run_discriminative.sh
