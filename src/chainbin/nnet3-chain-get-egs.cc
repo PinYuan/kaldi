@@ -196,7 +196,6 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
       nnet_chain_eg.outputs[0].Swap(&nnet_supervision);
     }
 
-    // nnet_chain_eg.inputs.resize(ivector_feats != NULL ? 3 : 2);
     nnet_chain_eg.inputs.resize(ivector_feats != NULL ? 2 : 1);
 
     int32 tot_input_frames = chunk.left_context + chunk.num_frames +
@@ -223,7 +222,6 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
       Matrix<BaseFloat> ivector(1, ivector_feats->NumCols());
       ivector.Row(0).CopyFromVec(ivector_feats->Row(ivector_frame_subsampled));
       NnetIo ivector_io("ivector", 0, ivector);
-      KALDI_LOG << "ivector t" << ivector_io.indexes[0].t;
       nnet_chain_eg.inputs[1].Swap(&ivector_io);
     }
 
@@ -232,35 +230,16 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
       nnet_chain_eg.inputs.resize(length + 1);
       // if applicable, add the aVector feature.
       // choose aVector from a random frame in the chunk
-      int32 avector_frame = frame,
-          avector_frame_subsampled = avector_frame / ivector_period;
-      if (avector_frame_subsampled < 0)
-        avector_frame_subsampled = 0;
-      if (avector_frame_subsampled >= avector_feats->NumRows())
-        avector_frame_subsampled = avector_feats->NumRows() - 1;
+      int32 avector_frame = frame;
+      if (avector_frame < 0)
+        avector_frame = 0;
+      if (avector_frame >= avector_feats->NumRows())
+        avector_frame = avector_feats->NumRows() - 1;
       Matrix<BaseFloat> avector(1, avector_feats->NumCols());
-      avector.Row(0).CopyFromVec(avector_feats->Row(avector_frame_subsampled));
+      avector.Row(0).CopyFromVec(avector_feats->Row(avector_frame));
       NnetIo avector_io("avector", 0, avector);
-      KALDI_LOG << "avector t" << avector_io.indexes[0].t;
       nnet_chain_eg.inputs[length].Swap(&avector_io);
     }
-
-    // if (avector_feats != NULL) {
-    //   int length = nnet_chain_eg.inputs.size();
-    //   nnet_chain_eg.inputs.resize(length + 1);
-
-    //   // if applicable, add the aVector feature.
-    //   // choose aVector from a random frame in the chunk
-    //   int32 avector_frame = frame;
-    //   if (avector_frame < 0)
-    //     avector_frame = 0;
-    //   if (avector_frame >= avector_feats->NumRows())
-    //     avector_frame = avector_feats->NumRows() - 1;
-    //   Matrix<BaseFloat> avector(1, avector_feats->NumCols());
-    //   avector.Row(0).CopyFromVec(avector_feats->Row(avector_frame));
-    //   NnetIo avector_io("avector", 0, avector);
-    //   nnet_chain_eg.inputs[length].Swap(&avector_io);
-    // }
 
     if (compress)
       nnet_chain_eg.Compress();
