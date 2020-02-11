@@ -62,6 +62,7 @@ max_shuffle_jobs_run=50  # the shuffle jobs now include the nnet3-chain-normaliz
                          # without overloading the disks.
 srand=0     # rand seed for nnet3-chain-get-egs, nnet3-chain-copy-egs and nnet3-chain-shuffle-egs
 online_ivector_dir=  # can be used if we are including speaker information as iVectors.
+avector_dir=  # can be used if we are including age information as aVectors.
 cmvn_opts=  # can be used for specifying CMVN options, if feature type is not lda (if lda,
             # it doesn't make sense to use different options than were used as input to the
             # LDA transform).  This is used to turn off CMVN in the online-nnet experiments.
@@ -142,6 +143,9 @@ echo $dir
 # Check some files.
 [ ! -z "$online_ivector_dir" ] && \
   extra_files="$online_ivector_dir/ivector_online.scp $online_ivector_dir/ivector_period"
+
+[ ! -z "$avector_dir" ] && \
+  extra_files="$avector_dir/avector.scp"
 
 for f in $data/feats.scp $latdir/lat.1.gz $latdir/final.mdl \
          $chaindir/{0.trans_mdl,tree,normalization.fst} $extra_files; do
@@ -244,6 +248,15 @@ if [ ! -z "$online_ivector_dir" ]; then
 else
   ivector_opts=""
   echo 0 >$dir/info/ivector_dim
+fi
+
+if [ ! -z "$avector_dir" ]; then
+  avector_dim=$(feat-to-dim scp:$avector_dir/avector.scp -) || exit 1;
+  echo $avector_dim > $dir/info/avector_dim
+  avector_opts="--avectors=scp:$avector_dir/avector.scp"
+else
+  avector_opts=""
+  echo 0 >$dir/info/avector_dim
 fi
 
 if [ $stage -le 1 ]; then
@@ -373,7 +386,7 @@ if [ $stage -le 2 ]; then
       lattice-align-phones --replace-output-symbols=true $latdir/final.mdl scp:- ark:- \| \
       chain-get-supervision $chain_supervision_all_opts $chaindir/tree $chaindir/0.trans_mdl \
         ark:- ark:- \| \
-      nnet3-chain-get-egs $ivector_opts --srand=$srand \
+      nnet3-chain-get-egs $ivector_opts $avector_opts --srand=$srand \
          $egs_opts --normalization-fst-scale=$normalization_fst_scale \
          $trans_mdl_opt $chaindir/normalization.fst \
         "$valid_feats" ark,s,cs:- "ark:$dir/valid_all.cegs" || exit 1
@@ -382,7 +395,7 @@ if [ $stage -le 2 ]; then
       lattice-align-phones --replace-output-symbols=true $latdir/final.mdl scp:- ark:- \| \
       chain-get-supervision $chain_supervision_all_opts \
         $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
-      nnet3-chain-get-egs $ivector_opts --srand=$srand \
+      nnet3-chain-get-egs $ivector_opts $avector_opts --srand=$srand \
         $egs_opts --normalization-fst-scale=$normalization_fst_scale \
         $trans_mdl_opt $chaindir/normalization.fst \
         "$train_subset_feats" ark,s,cs:- "ark:$dir/train_subset_all.cegs" || exit 1
@@ -447,7 +460,7 @@ if [ $stage -le 4 ]; then
       "$lats_rspecifier" ark:- \| \
     chain-get-supervision $chain_supervision_all_opts \
       $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
-    nnet3-chain-get-egs $ivector_opts --srand=\$[JOB+$srand] $egs_opts \
+    nnet3-chain-get-egs $ivector_opts $avector_opts --srand=\$[JOB+$srand] $egs_opts \
       --num-frames-overlap=$frames_overlap_per_eg $trans_mdl_opt \
      "$feats" ark,s,cs:- ark:- \| \
     nnet3-chain-copy-egs --random=true --srand=\$[JOB+$srand] ark:- $egs_list || exit 1;

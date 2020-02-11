@@ -719,6 +719,10 @@ class CommonParser(object):
                                  action=common_lib.NullstrToNoneAction,
                                  help="""directory with the ivectors extracted
                                  in an online fashion.""")
+        self.parser.add_argument("--feat.avector-dir", type=str,
+                                 dest='avector_dir', default=None,
+                                 action=common_lib.NullstrToNoneAction,
+                                 help="""directory with the avectors extracted.""")
         self.parser.add_argument("--feat.cmvn-opts", type=str,
                                  dest='cmvn_opts', default=None,
                                  action=common_lib.NullstrToNoneAction,

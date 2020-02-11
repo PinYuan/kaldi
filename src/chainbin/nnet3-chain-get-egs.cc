@@ -91,6 +91,7 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
                         const GeneralMatrix &feats,
                         const MatrixBase<BaseFloat> *ivector_feats,
                         int32 ivector_period,
+                        const MatrixBase<BaseFloat> *avector_feats,
                         const chain::Supervision &supervision,
                         const VectorBase<BaseFloat> *deriv_weights,
                         int32 supervision_length_tolerance,
@@ -195,6 +196,7 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
       nnet_chain_eg.outputs[0].Swap(&nnet_supervision);
     }
 
+    // nnet_chain_eg.inputs.resize(ivector_feats != NULL ? 3 : 2);
     nnet_chain_eg.inputs.resize(ivector_feats != NULL ? 2 : 1);
 
     int32 tot_input_frames = chunk.left_context + chunk.num_frames +
@@ -208,11 +210,11 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
     NnetIo input_io("input", -chunk.left_context, input_frames);
     nnet_chain_eg.inputs[0].Swap(&input_io);
 
+    int32 frame = RandInt(start_frame, start_frame + num_input_frames - 1);
     if (ivector_feats != NULL) {
       // if applicable, add the iVector feature.
       // choose iVector from a random frame in the chunk
-      int32 ivector_frame = RandInt(start_frame,
-                                    start_frame + num_input_frames - 1),
+      int32 ivector_frame = frame,
           ivector_frame_subsampled = ivector_frame / ivector_period;
       if (ivector_frame_subsampled < 0)
         ivector_frame_subsampled = 0;
@@ -221,8 +223,44 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
       Matrix<BaseFloat> ivector(1, ivector_feats->NumCols());
       ivector.Row(0).CopyFromVec(ivector_feats->Row(ivector_frame_subsampled));
       NnetIo ivector_io("ivector", 0, ivector);
+      KALDI_LOG << "ivector t" << ivector_io.indexes[0].t;
       nnet_chain_eg.inputs[1].Swap(&ivector_io);
     }
+
+    if (avector_feats != NULL) {
+      int length = nnet_chain_eg.inputs.size();
+      nnet_chain_eg.inputs.resize(length + 1);
+      // if applicable, add the aVector feature.
+      // choose aVector from a random frame in the chunk
+      int32 avector_frame = frame,
+          avector_frame_subsampled = avector_frame / ivector_period;
+      if (avector_frame_subsampled < 0)
+        avector_frame_subsampled = 0;
+      if (avector_frame_subsampled >= avector_feats->NumRows())
+        avector_frame_subsampled = avector_feats->NumRows() - 1;
+      Matrix<BaseFloat> avector(1, avector_feats->NumCols());
+      avector.Row(0).CopyFromVec(avector_feats->Row(avector_frame_subsampled));
+      NnetIo avector_io("avector", 0, avector);
+      KALDI_LOG << "avector t" << avector_io.indexes[0].t;
+      nnet_chain_eg.inputs[length].Swap(&avector_io);
+    }
+
+    // if (avector_feats != NULL) {
+    //   int length = nnet_chain_eg.inputs.size();
+    //   nnet_chain_eg.inputs.resize(length + 1);
+
+    //   // if applicable, add the aVector feature.
+    //   // choose aVector from a random frame in the chunk
+    //   int32 avector_frame = frame;
+    //   if (avector_frame < 0)
+    //     avector_frame = 0;
+    //   if (avector_frame >= avector_feats->NumRows())
+    //     avector_frame = avector_feats->NumRows() - 1;
+    //   Matrix<BaseFloat> avector(1, avector_feats->NumCols());
+    //   avector.Row(0).CopyFromVec(avector_feats->Row(avector_frame));
+    //   NnetIo avector_io("avector", 0, avector);
+    //   nnet_chain_eg.inputs[length].Swap(&avector_io);
+    // }
 
     if (compress)
       nnet_chain_eg.Compress();
@@ -275,6 +313,7 @@ int main(int argc, char *argv[]) {
     BaseFloat normalization_fst_scale = 1.0;
     int32 srand_seed = 0;
     std::string online_ivector_rspecifier,
+        avector_rspecifier,
         deriv_weights_rspecifier,
         trans_mdl_rxfilename;
 
@@ -291,6 +330,8 @@ int main(int argc, char *argv[]) {
     po.Register("online-ivector-period", &online_ivector_period, "Number of "
                 "frames between iVectors in matrices supplied to the "
                 "--online-ivectors option");
+    po.Register("avectors", &avector_rspecifier, "Rspecifier of "
+                "avector features, as a matrix.");
     po.Register("srand", &srand_seed, "Seed for random number generator ");
     po.Register("length-tolerance", &length_tolerance, "Tolerance for "
                 "difference in num-frames between feat and ivector matrices");
@@ -374,6 +415,8 @@ int main(int argc, char *argv[]) {
     NnetChainExampleWriter example_writer(examples_wspecifier);
     RandomAccessBaseFloatMatrixReader online_ivector_reader(
         online_ivector_rspecifier);
+    RandomAccessBaseFloatMatrixReader avector_reader(
+        avector_rspecifier);
     RandomAccessBaseFloatVectorReader deriv_weights_reader(
         deriv_weights_rspecifier);
 
@@ -410,6 +453,19 @@ int main(int argc, char *argv[]) {
           continue;
         }
 
+        const Matrix<BaseFloat> *avector_feats = NULL;
+        if (!avector_rspecifier.empty()) {
+          if (!avector_reader.HasKey(key)) {
+            KALDI_WARN << "No aVectors for utterance " << key;
+            num_err++;
+            continue;
+          } else {
+            // this address will be valid until we call HasKey() or Value()
+            // again.
+            avector_feats = &(avector_reader.Value(key));
+          }
+        }
+
         const Vector<BaseFloat> *deriv_weights = NULL;
         if (!deriv_weights_rspecifier.empty()) {
           if (!deriv_weights_reader.HasKey(key)) {
@@ -424,7 +480,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (!ProcessFile(trans_mdl_ptr, normalization_fst, feats,
-                         online_ivector_feats, online_ivector_period,
+                         online_ivector_feats, online_ivector_period, avector_feats,
                          supervision, deriv_weights, supervision_length_tolerance,
                          key, compress,
                          &utt_splitter, &example_writer))

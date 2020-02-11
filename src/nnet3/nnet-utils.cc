@@ -63,9 +63,16 @@ bool IsSimpleNnet(const Nnet &nnet) {
   if (NumInputNodes(nnet) == 1)
     return true;
   // Otherwise, there should be input node with name "input" and one
-  // should be called "ivector".
-  return nnet.GetNodeIndex("ivector") != -1 &&
-      nnet.IsInputNode(nnet.GetNodeIndex("ivector"));
+  // should be called "ivector"/"avector".
+  if (nnet.GetNodeIndex("ivector") != -1) {
+    if (nnet.GetNodeIndex("avector") != -1)
+      return nnet.IsInputNode(nnet.GetNodeIndex("ivector")) &&
+          nnet.IsInputNode(nnet.GetNodeIndex("avector"));
+    else
+      return nnet.IsInputNode(nnet.GetNodeIndex("ivector"));
+  } else {
+      return nnet.IsInputNode(nnet.GetNodeIndex("avector"));
+  }
 }
 
 void EvaluateComputationRequest(
@@ -103,6 +110,8 @@ static bool ComputeSimpleNnetContextForShift(
   output.name = "output";
   IoSpecification ivector;  // we might or might not use this.
   ivector.name = "ivector";
+  IoSpecification avector;  // we might or might not use this.
+  avector.name = "avector";
 
   int32 n = rand() % 10;
   // in the IoSpecification for now we we will request all the same indexes at
@@ -120,12 +129,17 @@ static bool ComputeSimpleNnetContextForShift(
   for (int32 t = input_start - nnet.Modulus(); t < input_end; t++) {
     ivector.indexes.push_back(Index(n, t));
   }
+  for (int32 t = input_start - nnet.Modulus(); t < input_end; t++) {
+    avector.indexes.push_back(Index(n, t));
+  }
 
   ComputationRequest request;
   request.inputs.push_back(input);
   request.outputs.push_back(output);
   if (nnet.GetNodeIndex("ivector") != -1)
     request.inputs.push_back(ivector);
+  if (nnet.GetNodeIndex("avector") != -1)
+    request.inputs.push_back(avector);
   std::vector<std::vector<bool> > computable;
   EvaluateComputationRequest(nnet, request, &computable);
 
@@ -500,6 +514,7 @@ std::string NnetInfo(const Nnet &nnet) {
   }
   ostr << "input-dim: " << nnet.InputDim("input") << "\n";
   ostr << "ivector-dim: " << nnet.InputDim("ivector") << "\n";
+  ostr << "avector-dim: " << nnet.InputDim("avector") << "\n";
   ostr << "output-dim: " << nnet.OutputDim("output") << "\n";
   ostr << "# Nnet info follows.\n";
   ostr << nnet.Info();
