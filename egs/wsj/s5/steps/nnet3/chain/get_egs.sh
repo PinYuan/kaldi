@@ -253,7 +253,8 @@ fi
 if [ ! -z "$avector_dir" ]; then
   avector_dim=$(feat-to-dim scp:$avector_dir/avector.scp -) || exit 1;
   echo $avector_dim > $dir/info/avector_dim
-  avector_opts="--avectors=scp:$avector_dir/avector.scp"
+  avector_period=$(cat $avector_dir/avector_period) || exit 1;
+  avector_opts="--avectors=scp:$avector_dir/avector.scp --avector-period=$avector_period"
 else
   avector_opts=""
   echo 0 >$dir/info/avector_dim

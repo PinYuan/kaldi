@@ -60,6 +60,12 @@ namespace nnet3 {
                                       as in input to the egs.
      @param [in]  ivector_period      Number of frames between iVectors in
                                       "ivector_feats" matrix.
+     @param [in]  avector_feats       aVector matrix sub-sampled at a
+                                      rate of "avector_period".
+                                      If NULL, aVector will not be added
+                                      as in input to the egs.
+     @param [in]  avector_period      Number of frames between aVectors in
+                                      "avector_feats" matrix.
      @param [in]  supervision         Supervision for 'chain' training created
                                       from the binary chain-get-supervision.
                                       This is expected to be at a
@@ -92,6 +98,7 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
                         const MatrixBase<BaseFloat> *ivector_feats,
                         int32 ivector_period,
                         const MatrixBase<BaseFloat> *avector_feats,
+                        int32 avector_period,
                         const chain::Supervision &supervision,
                         const VectorBase<BaseFloat> *deriv_weights,
                         int32 supervision_length_tolerance,
@@ -230,13 +237,14 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
       nnet_chain_eg.inputs.resize(length + 1);
       // if applicable, add the aVector feature.
       // choose aVector from a random frame in the chunk
-      int32 avector_frame = frame;
-      if (avector_frame < 0)
-        avector_frame = 0;
-      if (avector_frame >= avector_feats->NumRows())
-        avector_frame = avector_feats->NumRows() - 1;
+      int32 avector_frame = frame,
+          avector_frame_subsampled = avector_frame / avector_period;
+      if (avector_frame_subsampled < 0)
+        avector_frame_subsampled = 0;
+      if (avector_frame_subsampled >= avector_feats->NumRows())
+        avector_frame_subsampled = avector_feats->NumRows() - 1;
       Matrix<BaseFloat> avector(1, avector_feats->NumCols());
-      avector.Row(0).CopyFromVec(avector_feats->Row(avector_frame));
+      avector.Row(0).CopyFromVec(avector_feats->Row(avector_frame_subsampled));
       NnetIo avector_io("avector", 0, avector);
       nnet_chain_eg.inputs[length].Swap(&avector_io);
     }
@@ -284,7 +292,7 @@ int main(int argc, char *argv[]) {
 
     bool compress = true;
     int32 length_tolerance = 100, online_ivector_period = 1,
-          supervision_length_tolerance = 1;
+          avector_period = 1, supervision_length_tolerance = 1;
 
     ExampleGenerationConfig eg_config;  // controls num-frames,
                                         // left/right-context, etc.
@@ -311,6 +319,9 @@ int main(int argc, char *argv[]) {
                 "--online-ivectors option");
     po.Register("avectors", &avector_rspecifier, "Rspecifier of "
                 "avector features, as a matrix.");
+    po.Register("avector-period", &avector_period, "Number of "
+                "frames between aVectors in matrices supplied to the "
+                "--avectors option");
     po.Register("srand", &srand_seed, "Seed for random number generator ");
     po.Register("length-tolerance", &length_tolerance, "Tolerance for "
                 "difference in num-frames between feat and ivector matrices");
@@ -460,8 +471,8 @@ int main(int argc, char *argv[]) {
 
         if (!ProcessFile(trans_mdl_ptr, normalization_fst, feats,
                          online_ivector_feats, online_ivector_period, avector_feats,
-                         supervision, deriv_weights, supervision_length_tolerance,
-                         key, compress,
+                         avector_period, supervision, deriv_weights, 
+                         supervision_length_tolerance, key, compress,
                          &utt_splitter, &example_writer))
           num_err++;
       }
