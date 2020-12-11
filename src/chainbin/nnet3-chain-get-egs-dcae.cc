@@ -98,6 +98,7 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
                         const MatrixBase<BaseFloat> &targets,
                         int32 num_targets,
                         const BaseFloat frame_weight,
+                        int32 frame_subsampling_factor_ae,
                         const std::string &utt_id,
                         bool compress,
                         UtteranceSplitter *utt_splitter,
@@ -154,7 +155,10 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
     ChunkTimeInfo &chunk = chunks[c];
 
     int32 start_frame_subsampled = chunk.first_frame / frame_subsampling_factor,
-        num_frames_subsampled = chunk.num_frames / frame_subsampling_factor;
+        num_frames_subsampled = chunk.num_frames / frame_subsampling_factor,
+        start_frame_subsampled_ae = chunk.first_frame / frame_subsampling_factor_ae,
+        num_frames_subsampled_ae = chunk.num_frames / frame_subsampling_factor_ae;
+
 
     chain::Supervision supervision_part;
     sup_splitter.GetFrameRange(start_frame_subsampled,
@@ -238,15 +242,18 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
 
     // get-egs-dense-targets
     nnet_chain_eg.outputs_ae.resize(1);
-    KALDI_ASSERT(start_frame_subsampled + num_frames_subsampled - 1 <
-                 targets.NumRows());
+    // KALDI_LOG << "start_frame_subsampled_ae: " << start_frame_subsampled_ae;
+    // KALDI_LOG << "num_frames_subsampled_ae: " << num_frames_subsampled_ae;
+    // KALDI_LOG << "targets.NumRows(): " << targets.NumRows();
+    // KALDI_ASSERT(start_frame_subsampled_ae + num_frames_subsampled_ae - 1 <
+    //              targets.NumRows());
 
     // add the labels.
-    Matrix<BaseFloat> targets_part(num_frames_subsampled, targets.NumCols());
-    for (int32 i = 0; i < num_frames_subsampled; i++) {
+    Matrix<BaseFloat> targets_part(num_frames_subsampled_ae, targets.NumCols());
+    for (int32 i = 0; i < num_frames_subsampled_ae; i++) {
       // Copy the i^th row of the target matrix from the (t+i)^th row of the
       // input targets matrix
-      int32 t = i + start_frame_subsampled;
+      int32 t = i + start_frame_subsampled_ae;
       if (t >= targets.NumRows()) t = targets.NumRows() - 1;
       SubVector<BaseFloat> this_target_dest(targets_part, i);
       SubVector<BaseFloat> this_target_src(targets, t);
@@ -256,7 +263,7 @@ static bool ProcessFile(const TransitionModel *trans_mdl,
     // KALDI_WARN << "target " << targets_part;
 
     // push this created targets matrix into the eg
-    NnetIo dcae_io("output_ae", 0, targets_part, frame_weight, frame_subsampling_factor);
+    NnetIo dcae_io("output_ae", 0, targets_part, frame_weight, frame_subsampling_factor_ae);
     nnet_chain_eg.outputs_ae[0].Swap(&dcae_io);
 
     if (compress)
@@ -304,6 +311,7 @@ int main(int argc, char *argv[]) {
     int32 num_targets = -1, length_tolerance = 100, online_ivector_period = 1,
           supervision_length_tolerance = 1;
     BaseFloat frame_weight = 1.0;
+    int32 frame_subsampling_factor_ae = 3; // compatible with orginal chain model 
 
     ExampleGenerationConfig eg_config;  // controls num-frames,
                                         // left/right-context, etc.
@@ -358,6 +366,9 @@ int main(int argc, char *argv[]) {
     po.Register("frame-weight", &frame_weight,
                 "For dcae training,"
                 "Set the weight between decoder loss and ASR loss (0~1)");
+    po.Register("frame-subsampling-factor-ae", &frame_subsampling_factor_ae,
+                "For dcae training,"
+                "Set the frame-subsampling-factor for output_ae");
 
     eg_config.Register(&po);
 
@@ -519,6 +530,7 @@ int main(int argc, char *argv[]) {
                 trans_mdl_ptr, normalization_fst, feats, online_ivector_feats,
                 online_ivector_period, supervision, deriv_weights,
                 supervision_length_tolerance, target_matrix, num_targets, frame_weight,
+                frame_subsampling_factor_ae,
                 key, compress, &utt_splitter, &example_writer))
           num_err++;
       }

@@ -33,6 +33,7 @@ extra_left_context_initial=-1
 extra_right_context_final=-1
 online_ivector_dir=
 minimize=false
+hack_nvector=false
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -69,7 +70,11 @@ model=$srcdir/$iter.mdl
 extra_files=
 if [ ! -z "$online_ivector_dir" ]; then
   steps/nnet2/check_ivectors_compatible.sh $srcdir $online_ivector_dir || exit 1
-  extra_files="$online_ivector_dir/ivector_online.scp $online_ivector_dir/ivector_period"
+  if $hack_nvector; then
+    extra_files="$online_ivector_dir/ivector_online.scp"
+  else
+    extra_files="$online_ivector_dir/ivector_online.scp $online_ivector_dir/ivector_period"
+  fi
 fi
 
 utils/lang/check_phones_compatible.sh {$srcdir,$graphdir}/phones.txt || exit 1
@@ -113,8 +118,12 @@ else
 fi
 
 if [ ! -z "$online_ivector_dir" ]; then
-  ivector_period=$(cat $online_ivector_dir/ivector_period) || exit 1;
-  ivector_opts="--online-ivectors=scp:$online_ivector_dir/ivector_online.scp --online-ivector-period=$ivector_period"
+  if $hack_nvector; then
+    ivector_opts="--ivectors=scp:$online_ivector_dir/ivector_online.scp"
+  else
+    ivector_period=$(cat $online_ivector_dir/ivector_period) || exit 1;
+    ivector_opts="--online-ivectors=scp:$online_ivector_dir/ivector_online.scp --online-ivector-period=$ivector_period"
+  fi
 fi
 
 if [ "$post_decode_acwt" == 1.0 ]; then

@@ -52,6 +52,7 @@ frames_per_iter=400000 # each iteration of training, see this many frames per
 
 right_tolerance=  # chain right tolerance == max label delay.
 left_tolerance=
+length_tolerance=100 # tolerance between feats and ivector's feats * ivector_period
 
 stage=0
 max_jobs_run=30         # This should be set to the maximum number of nnet3-chain-get-egs jobs you are
@@ -102,6 +103,7 @@ target_clean=false  #For dcae training with multi-condition data. Set
                     #to true if you wish the target for the autoencoder output 
                     #is the clean version of the input data.
 frame_weight=1.0  #Sets weight of output_ae loss
+frame_subsampling_factor_ae=3 # Set frame_subsampleing_factor for output_ae
 
 echo "$0 $@"  # Print the command line for logging
 
@@ -449,8 +451,9 @@ if [ $stage -le 2 ]; then
       chain-get-supervision $chain_supervision_all_opts $chaindir/tree $chaindir/0.trans_mdl \
         ark:- ark:- \| \
       nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets --target-clean=$target_clean \
-        --frame-weight=$frame_weight \
-         $egs_opts --normalization-fst-scale=$normalization_fst_scale \
+        --frame-weight=$frame_weight --frame-subsampling-factor-ae=$frame_subsampling_factor_ae \
+         --length-tolerance=$length_tolerance \
+       	 $egs_opts --normalization-fst-scale=$normalization_fst_scale \
          $trans_mdl_opt $chaindir/normalization.fst \
         "$valid_feats" ark,s,cs:- "$valid_targets" "ark:$dir/valid_all.cegs" || exit 1
     $cmd $dir/log/create_train_subset.log \
@@ -459,8 +462,9 @@ if [ $stage -le 2 ]; then
       chain-get-supervision $chain_supervision_all_opts \
         $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
       nnet3-chain-get-egs-dcae $ivector_opts --srand=$srand --num-targets=$num_targets --target-clean=$target_clean\
-        --frame-weight=$frame_weight \
-        $egs_opts --normalization-fst-scale=$normalization_fst_scale \
+        --frame-weight=$frame_weight --frame-subsampling-factor-ae=$frame_subsampling_factor_ae \
+        --length-tolerance=$length_tolerance \
+	$egs_opts --normalization-fst-scale=$normalization_fst_scale \
         $trans_mdl_opt $chaindir/normalization.fst \
         "$train_subset_feats" ark,s,cs:- "$train_subset_targets" "ark:$dir/train_subset_all.cegs" || exit 1
     wait
@@ -527,7 +531,8 @@ if [ $stage -le 4 ]; then
     chain-get-supervision $chain_supervision_all_opts \
       $chaindir/tree $chaindir/0.trans_mdl ark:- ark:- \| \
     nnet3-chain-get-egs-dcae $ivector_opts --srand=\$[JOB+$srand] $egs_opts --num-targets=$num_targets --target-clean=$target_clean \
-      --frame-weight=$frame_weight \
+      --frame-weight=$frame_weight --frame-subsampling-factor-ae=$frame_subsampling_factor_ae \
+      --length-tolerance=$length_tolerance \
       --num-frames-overlap=$frames_overlap_per_eg $trans_mdl_opt \
      "$feats" ark,s,cs:- "$targets" ark:- \| \
     nnet3-chain-copy-egs --random=true --srand=\$[JOB+$srand] ark:- $egs_list || exit 1;

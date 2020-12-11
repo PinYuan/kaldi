@@ -87,6 +87,9 @@ def get_args():
                         dest='right_tolerance', default=5, help="")
     parser.add_argument("--chain.left-tolerance", type=int,
                         dest='left_tolerance', default=5, help="")
+    parser.add_argument("--chain.length-tolerance", type=int,
+                        dest='length_tolerance', default=100,
+                        help="tolerance between feats and ivector's feats * ivector_period")
     parser.add_argument("--chain.leaky-hmm-coefficient", type=float,
                         dest='leaky_hmm_coefficient', default=0.00001,
                         help="")
@@ -394,6 +397,7 @@ def train(args, run_opts):
             run_opts=run_opts,
             left_tolerance=args.left_tolerance,
             right_tolerance=args.right_tolerance,
+            length_tolerance=args.length_tolerance,
             frame_subsampling_factor=args.frame_subsampling_factor,
             alignment_subsampling_factor=args.alignment_subsampling_factor,
             frames_per_eg_str=args.chunk_width,

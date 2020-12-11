@@ -67,6 +67,10 @@ def get_args():
                         default=1.0,
                         help="""For dcae training with multi-condition data. Set 
                         weight of output_ae loss""")
+    parser.add_argument("--egs.frame-subsampling-factor-ae", type=int, dest='frame_subsampling_factor_ae',
+                        default=3,
+                        help="""For dcae training with multi-condition data. Set 
+                        frame_subsampling_factor_ae of output_ae loss""")
 
     # chain options
     parser.add_argument("--chain.lm-opts", type=str, dest='lm_opts',
@@ -87,6 +91,9 @@ def get_args():
                         dest='right_tolerance', default=5, help="")
     parser.add_argument("--chain.left-tolerance", type=int,
                         dest='left_tolerance', default=5, help="")
+    parser.add_argument("--chain.length-tolerance", type=int,
+                        dest='length_tolerance', default=100,
+                        help="tolerance between feats and ivector's feats * ivector_period")
     parser.add_argument("--chain.leaky-hmm-coefficient", type=float,
                         dest='leaky_hmm_coefficient', default=0.00001,
                         help="")
@@ -406,6 +413,7 @@ def train(args, run_opts):
                 --right-context-final {right_context_final} \
                 --left-tolerance '{left_tolerance}' \
                 --right-tolerance '{right_tolerance}' \
+                --length-tolerance '{length_tolerance}' \
                 --frame-subsampling-factor {frame_subsampling_factor} \
                 --alignment-subsampling-factor {alignment_subsampling_factor} \
                 --stage {stage} \
@@ -413,6 +421,7 @@ def train(args, run_opts):
                 --frames-per-eg {frames_per_eg_str} \
                 --target-clean {target_clean} \
                 --frame-weight {frame_weight} \
+                --frame-subsampling-factor-ae {frame_subsampling_factor_ae} \
                 --srand {srand} \
                 --generate-egs-scp true \
                 {data_dir} {dir} {lat_dir} {target_scp} {egs_dir}""".format(
@@ -428,12 +437,14 @@ def train(args, run_opts):
                 right_context_final=egs_right_context_final,
                 left_tolerance=args.left_tolerance,
                 right_tolerance=args.right_tolerance,
+                length_tolerance=args.length_tolerance,
                 frame_subsampling_factor=args.frame_subsampling_factor,
                 alignment_subsampling_factor=args.alignment_subsampling_factor,
                 stage=args.egs_stage, frames_per_iter=args.frames_per_iter,
                 frames_per_eg_str=str(args.chunk_width), 
                 target_clean=args.target_clean,
                 frame_weight=args.frame_weight,
+                frame_subsampling_factor_ae=args.frame_subsampling_factor_ae,
                 srand=args.srand,
                 data_dir=args.feat_dir, dir=args.dir, lat_dir=args.lat_dir, target_scp=args.target_scp, egs_dir=default_egs_dir))
 

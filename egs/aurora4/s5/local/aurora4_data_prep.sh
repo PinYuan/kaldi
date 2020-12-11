@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
 # Copyright 2009-2012  Microsoft Corporation  Johns Hopkins University (Author: Daniel Povey)
@@ -316,24 +316,33 @@ cat test_eval92_*_sph.scp | sort -k1 > test_eval92_sph.scp
 cat test_0166_??.trans1 | sort -k1 > test_0166.trans1
 cat test_eval92_??.trans1 | sort -k1 > test_eval92.trans1
 
+# A B C D sets
+cat test*_01_sph.scp | sort -k1 | uniq > test_A_sph.scp
+cat $(ls | grep "test.*_0[2-7]_sph.scp")  | sort -k1 | uniq > test_B_sph.scp
+cat test*_08_sph.scp | sort -k1 | uniq > test_C_sph.scp
+cat $(ls | grep "test.*_09_sph.scp\|test.*_1[0-4]_sph.scp") | sort -k1 | uniq > test_D_sph.scp
+cat test*_01.trans1 | sort -k1 | uniq > test_A.trans1
+cat $(ls | grep "test.*_0[2-7].trans1")  | sort -k1 | uniq > test_B.trans1
+cat test*_08.trans1 | sort -k1 | uniq > test_C.trans1
+cat $(ls | grep "test.*_09.trans1\|test.*_1[0-4].trans1") | sort -k1 | uniq > test_D.trans1
 
 # Do some basic normalization steps.  At this point we don't remove OOVs--
 # that will be done inside the training scripts, as we'd like to make the
 # data-preparation stage independent of the specific lexicon used.
 noiseword="<NOISE>";
-for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206; do
+for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206 test_A test_B test_C test_D; do
   cat $x.trans1 | $local/normalize_transcript.pl $noiseword \
     | sort > $x.txt || exit 1;
 done
 
 # Create scp's with wav's. (the wv1 in the distribution is not really wav, it is sph.)
-for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206; do
+for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206 test_A test_B test_C test_D; do
   awk '{printf("%s sox -B -r 16k -e signed -b 16 -c 1 -t raw %s -t wav - |\n", $1, $2);}' < ${x}_sph.scp \
     > ${x}_wav.scp
 done
 
 # Make the utt2spk and spk2utt files.
-for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206; do
+for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206 test_A test_B test_C test_D; do
   cat ${x}_sph.scp | awk '{print $1}' \
     | perl -ane 'chop; m:^...:; print "$_ $&\n";' > $x.utt2spk
   cat $x.utt2spk | $utils/utt2spk_to_spk2utt.pl > $x.spk2utt || exit 1;

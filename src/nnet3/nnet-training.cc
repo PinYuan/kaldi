@@ -402,12 +402,22 @@ void ComputeObjectiveFunction(const GeneralMatrix &supervision,
                                kUndefined);
       diff.CopyFromGeneralMat(supervision);
       diff.AddMat(-1.0, output);
-      diff.Scale(frame_weights);
       *tot_weight = diff.NumRows();
-      *tot_objf = -0.5 * TraceMatMat(diff, diff, kTrans);
+      *tot_objf = -0.5 * frame_weights * TraceMatMat(diff, diff, kTrans);
       if (supply_deriv)
         computer->AcceptInput(output_name, &diff);
       break;
+      // CuMatrix<BaseFloat> diff(supervision.NumRows(),
+      //                          supervision.NumCols(),
+      //                          kUndefined);
+      // diff.CopyFromGeneralMat(supervision);
+      // diff.AddMat(-1.0, output);
+      // diff.Scale(frame_weights);
+      // *tot_weight = diff.NumRows();
+      // *tot_objf = -0.5 * TraceMatMat(diff, diff, kTrans);
+      // if (supply_deriv)
+      //   computer->AcceptInput(output_name, &diff);
+      // break;
     }
     default:
       KALDI_ERR << "Objective function type " << objective_type

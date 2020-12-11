@@ -108,7 +108,7 @@ if [ $stage -le 12 ]; then
   # relu-renorm-layer name=tdnn11 dim=650
   # relu-renorm-layer name=tdnn12 dim=650
   output-layer name=output dim=$num_targets input=tdnn6 max-change=1.5 learning-rate-factor=$weight
-  output-layer name=output_ae include-log-softmax=false learning-rate-factor=$weight_ae max-change=1.0 objective-type=quadratic input=tdnn10 dim=40
+  # output-layer name=output_ae include-log-softmax=false learning-rate-factor=$weight_ae max-change=1.0 objective-type=quadratic input=Append(tdnn6,ivector) dim=40
 EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
 fi
