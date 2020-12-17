@@ -59,3 +59,9 @@ for x in $*; do
   fi
 done
 echo
+
+echo -n "# Num-params              "
+for x in $*; do
+  printf "% 10s" $(grep num-parameters exp/$mic/chain_cleaned/${x}/log/progress.1.log | awk '{print $2}')
+done
+echo

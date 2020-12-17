@@ -20,7 +20,7 @@
 set -e -o pipefail
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=0
+stage=15
 mic=ihm
 nj=30
 min_seg_len=1.55
@@ -31,7 +31,6 @@ ihm_gmm=tri3  # the gmm for the IHM system (if --use-ihm-ali true).
 num_threads_ubm=32
 ivector_transform_type=pca
 nnet3_affix=_cleaned  # cleanup affix for nnet3 and chain dirs, e.g. _cleaned
-num_epochs=15
 remove_egs=true
 
 # The rest are configs specific to this script.  Most of the parameters
@@ -41,6 +40,15 @@ tree_affix=  # affix for tree directory, e.g. "a" or "b", in case we change the 
 tdnn_affix=1j  #affix for TDNN directory, e.g. "a" or "b", in case we change the configuration.
 common_egs_dir=  # you can set this to use previously dumped egs.
 dropout_schedule='0,0@0.20,0.5@0.50,0'
+
+# training options
+srand=0
+num_of_epoch=50
+frame_weight=0.04
+initial_effective_lrate=0.001
+final_effective_lrate=0.0001
+argu_desc="e${num_of_epoch}_f${frame_weight}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -83,7 +91,7 @@ if $use_ihm_ali; then
   lores_train_data_dir=data/$mic/${train_set}_ihmdata_sp_comb
   tree_dir=exp/$mic/chain${nnet3_affix}/tree_bi${tree_affix}_ihmdata
   lat_dir=exp/$mic/chain${nnet3_affix}/${gmm}_${train_set}_sp_comb_lats_ihmdata
-  dir=exp/$mic/chain${nnet3_affix}/tdnn${tdnn_affix}_sp_bi_ihmali
+  dir=exp/$mic/chain${nnet3_affix}/train_from_scratch/TDNN_1J/FSFAE3/AM_SPECAUG/tdnn_${tdnn_affix}_sp_bi_ihmali/feam_specaug_mfcc_v0/${argu_desc}
   # note: the distinction between when we use the 'ihmdata' suffix versus
   # 'ihmali' is pretty arbitrary.
 else
@@ -99,6 +107,8 @@ train_data_dir=data/$mic/${train_set}_sp_hires_80_comb
 train_ivector_dir=exp/$mic/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires_80_comb
 final_lm=`cat data/local/lm/final_lm`
 LM=$final_lm.pr1-7
+
+target_scp=data/$mic/${train_set}_ihmdata_sp_hires_80_comb/feats.scp
 
 
 for f in $gmm_dir/final.mdl $lores_train_data_dir/feats.scp \
@@ -183,13 +193,26 @@ if [ $stage -le 15 ]; then
   input dim=100 name=ivector
   input dim=80 name=input
 
+  # Denoise Autoencoder
+  # Copy from aspire/s5/local/nnet3/run_autoencoder.sh + seg-augment
+  idct-layer name=idct input=input dim=80 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat include-in-init=true
+  batchnorm-component name=batchnorm0 input=idct include-in-init=true
+  spec-augment-layer name=spec-augment freq-max-proportion=0.5 time-zeroed-proportion=0.2 time-mask-max-frames=20 include-in-init=true
+
+  relu-renorm-layer name=tdnn1 dim=1024 input=Append(-2,-1,0,1,2)
+  relu-renorm-layer name=tdnn2 dim=1024 input=Append(-1,2)
+  relu-renorm-layer name=tdnn3 dim=1024 input=Append(-3,3)
+  relu-renorm-layer name=tdnn4 dim=1024 input=Append(-7,2)
+  relu-renorm-layer name=tdnn5 dim=1024
+  output-layer name=output_ae include-log-softmax=false learning-rate-factor=1 objective-type=quadratic input=tdnn5 dim=80
+
   # please note that it is important to have input layer with the name=input
   # as the layer immediately preceding the fixed-affine-layer to enable
   # the use of short notation for the descriptor
-  fixed-affine-layer name=lda input=Append(-1,0,1,ReplaceIndex(ivector, t, 0)) affine-transform-file=$dir/configs/lda.mat
+  fixed-affine-layer name=lda input=Append(spec-augment@-1,spec-augment@0,spec-augment@1,ReplaceIndex(ivector, t, 0)) affine-transform-file=$dir/configs/lda.mat
 
   # the first splicing is moved before the lda layer, so no splicing here
-  relu-batchnorm-dropout-layer name=tdnn1 $affine_opts dim=2136
+  relu-batchnorm-dropout-layer name=tdnn6 input=Append(lda,tdnn5) $affine_opts dim=2136
   tdnnf-layer name=tdnnf2 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=1
   tdnnf-layer name=tdnnf3 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=1
   tdnnf-layer name=tdnnf4 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=1
@@ -223,7 +246,7 @@ if [ $stage -le 16 ]; then
      /export/b0{5,6,7,8}/$USER/kaldi-data/egs/ami-$(date +'%m_%d_%H_%M')/s5b/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/nnet3/chain/train.py --stage $train_stage \
+  steps/chain/train_dcae.py --stage $train_stage \
     --cmd "$decode_cmd" \
     --feat.online-ivector-dir $train_ivector_dir \
     --feat.cmvn-opts "--norm-means=false --norm-vars=false" \
@@ -232,17 +255,19 @@ if [ $stage -le 16 ]; then
     --chain.l2-regularize 0.00005 \
     --chain.apply-deriv-weights false \
     --chain.lm-opts="--num-extra-lm-states=2000" \
+    --trainer.srand=$srand \
     --trainer.dropout-schedule $dropout_schedule \
+    --egs.frame-weight=$frame_weight \
     --egs.dir "$common_egs_dir" \
     --egs.opts "--frames-overlap-per-eg 0" \
     --egs.chunk-width 150 \
     --trainer.num-chunk-per-minibatch 32 \
     --trainer.frames-per-iter 1500000 \
-    --trainer.num-epochs $num_epochs \
+    --trainer.num-epochs $num_of_epoch \
     --trainer.optimization.num-jobs-initial 2 \
     --trainer.optimization.num-jobs-final 12 \
-    --trainer.optimization.initial-effective-lrate 0.001 \
-    --trainer.optimization.final-effective-lrate 0.0001 \
+    --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
+    --trainer.optimization.final-effective-lrate $final_effective_lrate \
     --trainer.max-param-change 2.0 \
     --cleanup.remove-egs $remove_egs \
     --cleanup.preserve-model-interval 50 \
@@ -250,6 +275,7 @@ if [ $stage -le 16 ]; then
     --feat-dir $train_data_dir \
     --tree-dir $tree_dir \
     --lat-dir $lat_dir \
+    --target_scp $target_scp \
     --dir $dir
 fi
 

@@ -20,7 +20,7 @@
 set -e -o pipefail
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=0
+stage=15
 mic=ihm
 nj=30
 min_seg_len=1.55
@@ -31,16 +31,23 @@ ihm_gmm=tri3  # the gmm for the IHM system (if --use-ihm-ali true).
 num_threads_ubm=32
 ivector_transform_type=pca
 nnet3_affix=_cleaned  # cleanup affix for nnet3 and chain dirs, e.g. _cleaned
-num_epochs=15
 remove_egs=true
 
 # The rest are configs specific to this script.  Most of the parameters
 # are just hardcoded at this level, in the commands below.
 train_stage=-10
 tree_affix=  # affix for tree directory, e.g. "a" or "b", in case we change the configuration.
-tdnn_affix=1j  #affix for TDNN directory, e.g. "a" or "b", in case we change the configuration.
+tdnn_affix=1a  #affix for TDNN directory, e.g. "a" or "b", in case we change the configuration.
 common_egs_dir=  # you can set this to use previously dumped egs.
 dropout_schedule='0,0@0.20,0.5@0.50,0'
+
+# training options
+srand=0
+num_of_epoch=15
+initial_effective_lrate=0.01
+final_effective_lrate=0.001
+argu_desc="e${num_of_epoch}_f${frame_weight}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -61,7 +68,7 @@ fi
 local/nnet3/run_ivector_common.sh --stage $stage \
                                   --mic $mic \
                                   --nj $nj \
-                                  --hires_suffix 80 \
+                                  --hires_suffix 40 \
                                   --min-seg-len $min_seg_len \
                                   --train-set $train_set \
                                   --gmm $gmm \
@@ -83,7 +90,7 @@ if $use_ihm_ali; then
   lores_train_data_dir=data/$mic/${train_set}_ihmdata_sp_comb
   tree_dir=exp/$mic/chain${nnet3_affix}/tree_bi${tree_affix}_ihmdata
   lat_dir=exp/$mic/chain${nnet3_affix}/${gmm}_${train_set}_sp_comb_lats_ihmdata
-  dir=exp/$mic/chain${nnet3_affix}/tdnn${tdnn_affix}_sp_bi_ihmali
+  dir=exp/$mic/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/tdnn_${tdnn_affix}_sp_bi_ihmali/${argu_desc}
   # note: the distinction between when we use the 'ihmdata' suffix versus
   # 'ihmali' is pretty arbitrary.
 else
@@ -95,8 +102,8 @@ else
   dir=exp/$mic/chain${nnet3_affix}/tdnn${tdnn_affix}_sp_bi
 fi
 
-train_data_dir=data/$mic/${train_set}_sp_hires_80_comb
-train_ivector_dir=exp/$mic/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires_80_comb
+train_data_dir=data/$mic/${train_set}_sp_hires_40_comb
+train_ivector_dir=exp/$mic/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires_40_comb
 final_lm=`cat data/local/lm/final_lm`
 LM=$final_lm.pr1-7
 
@@ -181,35 +188,32 @@ if [ $stage -le 15 ]; then
   mkdir -p $dir/configs
   cat <<EOF > $dir/configs/network.xconfig
   input dim=100 name=ivector
-  input dim=80 name=input
-
-  # please note that it is important to have input layer with the name=input
-  # as the layer immediately preceding the fixed-affine-layer to enable
-  # the use of short notation for the descriptor
-  fixed-affine-layer name=lda input=Append(-1,0,1,ReplaceIndex(ivector, t, 0)) affine-transform-file=$dir/configs/lda.mat
-
+  input dim=40 name=input
+  
+  idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
+  delta-layer name=delta input=idct
+  no-op-component name=input2 input=Append(delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  
   # the first splicing is moved before the lda layer, so no splicing here
-  relu-batchnorm-dropout-layer name=tdnn1 $affine_opts dim=2136
-  tdnnf-layer name=tdnnf2 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=1
-  tdnnf-layer name=tdnnf3 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=1
-  tdnnf-layer name=tdnnf4 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=1
-  tdnnf-layer name=tdnnf5 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=0
-  tdnnf-layer name=tdnnf6 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  tdnnf-layer name=tdnnf7 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  tdnnf-layer name=tdnnf8 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  tdnnf-layer name=tdnnf9 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  tdnnf-layer name=tdnnf10 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  tdnnf-layer name=tdnnf11 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  tdnnf-layer name=tdnnf12 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  tdnnf-layer name=tdnnf13 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  tdnnf-layer name=tdnnf14 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  tdnnf-layer name=tdnnf15 $tdnnf_opts dim=2136 bottleneck-dim=210 time-stride=3
-  linear-component name=prefinal-l dim=512 $linear_opts
+  relu-batchnorm-layer name=tdnn1 $tdnn_opts dim=1024 input=input2
+  tdnnf-layer name=tdnnf2 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=1
+  tdnnf-layer name=tdnnf3 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=1
+  tdnnf-layer name=tdnnf4 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=1
+  tdnnf-layer name=tdnnf5 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=0
+  tdnnf-layer name=tdnnf6 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
+  tdnnf-layer name=tdnnf7 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
+  tdnnf-layer name=tdnnf8 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
+  tdnnf-layer name=tdnnf9 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
+  tdnnf-layer name=tdnnf10 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
+  tdnnf-layer name=tdnnf11 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
+  tdnnf-layer name=tdnnf12 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
+  tdnnf-layer name=tdnnf13 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
+  linear-component name=prefinal-l dim=192 $linear_opts
 
-  prefinal-layer name=prefinal-chain input=prefinal-l $prefinal_opts big-dim=2136 small-dim=512
+  prefinal-layer name=prefinal-chain input=prefinal-l $prefinal_opts big-dim=1024 small-dim=192
   output-layer name=output include-log-softmax=false dim=$num_targets $output_opts
-
-  prefinal-layer name=prefinal-xent input=prefinal-l $prefinal_opts big-dim=2136 small-dim=512
+  
+  prefinal-layer name=prefinal-xent input=prefinal-l $prefinal_opts big-dim=1024 small-dim=192
   output-layer name=output-xent dim=$num_targets learning-rate-factor=$learning_rate_factor $output_opts
 
 EOF
@@ -232,17 +236,18 @@ if [ $stage -le 16 ]; then
     --chain.l2-regularize 0.00005 \
     --chain.apply-deriv-weights false \
     --chain.lm-opts="--num-extra-lm-states=2000" \
+    --trainer.srand=$srand \
     --trainer.dropout-schedule $dropout_schedule \
     --egs.dir "$common_egs_dir" \
     --egs.opts "--frames-overlap-per-eg 0" \
     --egs.chunk-width 150 \
-    --trainer.num-chunk-per-minibatch 32 \
-    --trainer.frames-per-iter 1500000 \
-    --trainer.num-epochs $num_epochs \
+    --trainer.num-chunk-per-minibatch 128,64 \
+    --trainer.frames-per-iter 5000000 \
+    --trainer.num-epochs $num_of_epoch \
     --trainer.optimization.num-jobs-initial 2 \
     --trainer.optimization.num-jobs-final 12 \
-    --trainer.optimization.initial-effective-lrate 0.001 \
-    --trainer.optimization.final-effective-lrate 0.0001 \
+    --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
+    --trainer.optimization.final-effective-lrate $final_effective_lrate \
     --trainer.max-param-change 2.0 \
     --cleanup.remove-egs $remove_egs \
     --cleanup.preserve-model-interval 50 \
@@ -268,9 +273,9 @@ if [ $stage -le 18 ]; then
       (
       steps/nnet3/decode.sh --acwt 1.0 --post-decode-acwt 10.0 \
           --nj $nj --cmd "$decode_cmd" \
-          --online-ivector-dir exp/$mic/nnet3${nnet3_affix}/ivectors_${decode_set}_hires_80 \
+          --online-ivector-dir exp/$mic/nnet3${nnet3_affix}/ivectors_${decode_set}_hires_40 \
           --scoring-opts "--min-lmwt 5 " \
-         $graph_dir data/$mic/${decode_set}_hires_80 $dir/decode_${decode_set} || exit 1;
+         $graph_dir data/$mic/${decode_set}_hires_40 $dir/decode_${decode_set} || exit 1;
       ) || touch $dir/.error &
   done
   wait
