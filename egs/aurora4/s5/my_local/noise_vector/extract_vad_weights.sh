@@ -13,6 +13,7 @@ set -e
 stage=1
 cmd=run.pl
 silence_weight=0.00001
+conf_threshold=1.0 # default script is 1.0
 #end configuration section.
 
 . ./cmd.sh
@@ -50,7 +51,7 @@ if [ $stage -le 2 ]; then
   feat-to-len scp:$data_dir/feats.scp ark,t:- >$decode_dir/utt.lengths
   if [ ! -f $ctm ]; then  echo "$0: expected ctm to exist: $ctm"; exit 1; fi
 
-  cat $ctm | awk '$6 == 1.0 && $4 < 1.0' | \
+  cat $ctm | awk '$6 >= $conf_threshold && $4 < 1.0' | \
   grep -v -w mm | grep -v -w mhm | grep -v -F '[noise]' | \
   grep -v -F '[laughter]' | grep -v -F '<unk>' | \
   perl -e ' $lengths=shift @ARGV;  $pad_frames=shift @ARGV; $silence_weight=shift @ARGV;

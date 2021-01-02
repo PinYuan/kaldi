@@ -66,7 +66,8 @@ remove_egs=true
 num_of_epoch=10
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
-argu_desc="e${num_of_epoch}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+conf_threshold=0.8
+argu_desc="e${num_of_epoch}_ct${conf_threshold}_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -104,7 +105,7 @@ lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
 dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1G/FSFAE3/tdnn_${affix}_nvec/sad/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
-train_nvector_dir=my_data/noise_vector/sad/nvectors_${train_set}_sp_hires
+train_nvector_dir=my_data/noise_vector/sad/nvectors_${train_set}_sp_hires/conf_${conf_threshold}
 lores_train_data_dir=data/${train_set}_sp
 
 target_scp=data/${target_set}_sp_hires/feats.target.scp
@@ -303,7 +304,7 @@ if [ $stage -le 18 ]; then
           --frames-per-chunk $frames_per_chunk \
           --nj $nspk --cmd "$decode_cmd"  --num-threads 4 \
           --hack-nvector true \
-          --online-ivector-dir my_data/noise_vector/sad/nvectors_${data}_hires \
+          --online-ivector-dir my_data/noise_vector/sad/nvectors_${data}_hires/conf_${conf_threshold} \
           $tree_dir/graph_${lmtype} data/${data}_hires ${dir}/decode_${lmtype}_${data_affix} || exit 1
       done
 

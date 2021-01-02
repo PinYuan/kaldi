@@ -16,7 +16,7 @@ def main(kind):
     data = dict()
 
     with open(f"data/{multi_set}/wav.scp") as multi_file, open(f"data/{clean_set}/wav.scp") as clean_file,\
-        open(f"data/train_si84_{kind}/log/mix_wav.log", "w") as log_file:
+        open(f"data/train_si84_{kind}_sp_hires/log/mix_wav.log", "w") as log_file:
         for multi_line, clean_line in tqdm.tqdm(zip(multi_file, clean_file)):
             multi_key, multi_cmd = multi_line.strip().split(" ", 1)
             clean_key, clean_cmd = clean_line.strip().split(" ", 1)
@@ -35,8 +35,8 @@ def main(kind):
     with open(f"{data_dir}/wav.scp", "w") as file:
         for key in sorted(data):
             file.write(f"{key} {data[key]}\n")
-    copyfile(f"data/train_si84_multi_sp_hires/utt2spk", f"{data_dir}/utt2spk")
-    copyfile(f"data/train_si84_multi_sp_hires/spk2utt", f"{data_dir}/spk2utt")
+    copyfile(f"data/{multi_set}/utt2spk", f"{data_dir}/utt2spk")
+    copyfile(f"data/{multi_set}/spk2utt", f"{data_dir}/spk2utt")
 
 
 if __name__ == "__main__":
@@ -46,4 +46,4 @@ if __name__ == "__main__":
                              "'pure_noise' only extract added noise (TODO)")
     args = parser.parse_args()
 
-    main()
+    main(kind=args.kind)

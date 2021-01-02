@@ -3,12 +3,13 @@
 . ./cmd.sh
 . ./path.sh
 
-stage=0
+stage=1
 
 train_sets="si84_multi_sp"
 test_sets="A B C D"
 model_affix="_multi"
 silence_weight=0.00001
+conf_threshold=1.0
 
 
 if [ $stage -le 0 ]; then
@@ -46,8 +47,9 @@ if [ $stage -le 1 ]; then
         
         decode_dir=exp/tri3b${model_affix}/decode_tgpr_${datadir}
 
-        vad_weights=${decode_dir}/weights.gz
+        vad_weights=${decode_dir}/weights_${conf_threshold}.gz
         my_local/noise_vector/extract_vad_weights.sh --silence-weight $silence_weight \
+            --conf-threshold $conf_threshold \
             --cmd "$decode_cmd" ${iter:+--iter $iter} \
             data/${datadir_prefix}_${datadir} data/lang_test_tgpr \
             ${decode_dir} $vad_weights
@@ -57,5 +59,5 @@ fi
 
 if [ $stage -le 2 ]; then
     echo "Computing noise vector -> my_data/noise_vector/..."
-    python3 my_local/noise_vector/gen_noise_vector.py # 'flm' or 'sad', default is 'sad'
+    python3 my_local/noise_vector/gen_noise_vector.py --weights-conf-threshold ${conf_threshold} # 'flm' or 'sad', default is 'sad'
 fi

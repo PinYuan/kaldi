@@ -4,7 +4,7 @@
 . ./path.sh
 
 # Prepare noise dir -> data/train_si84_noise_mismatch_sp_hires
-python3 my_local/extract_noise/prepare_noise_dir.py
+python3 my_local/noise_distortion/prepare_noise_dir.py
 
 # Extract 40-D MFCC
 data_dir="train_si84_noise_mismatch_sp_hires"
