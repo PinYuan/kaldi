@@ -90,8 +90,8 @@ GSYMS
 /egs/*/*/ivectors
 /egs/*/*/rnnlm
 /egs/*/rnnlm
-/egs/*/*/my_data # my generated data
-/egs/*/*/tmp # temp folder for generating pdf report
+/egs/*/*/my_data
+/egs/*/*/tmp
 /egs/*/*/RIRS_NOISES
 /egs/*/*/rirs_noises.zip
 /egs/*/*/pb_chime5
