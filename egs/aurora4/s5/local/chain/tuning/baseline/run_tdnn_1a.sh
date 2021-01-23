@@ -19,7 +19,7 @@ set -e -o pipefail
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=12
+stage=15
 nj=30
 train_set=train_si84_multi
 test_sets="test_eval92 test_0166 test_A test_B test_C test_D"
@@ -278,7 +278,7 @@ if [ $stage -le 15 ]; then
     (
       data_affix=$(echo $data | sed s/test_//)
       nspk=$(wc -l <data/${data}_hires/spk2utt)
-      for lmtype in tgpr_5k tgpr; do
+      for lmtype in tgpr_5k bg; do
         steps/nnet3/decode.sh \
           --acwt 1.0 --post-decode-acwt 10.0 \
           --extra-left-context 0 --extra-right-context 0 \
