@@ -52,6 +52,7 @@ frames_per_iter=400000 # each iteration of training, see this many frames per
 
 right_tolerance=  # chain right tolerance == max label delay.
 left_tolerance=
+length_tolerance=100 # tolerance between feats and ivector's feats * ivector_period
 
 stage=0
 max_jobs_run=30         # This should be set to the maximum number of nnet3-chain-get-egs jobs you are
@@ -447,6 +448,7 @@ if [ $stage -le 2 ]; then
       nnet3-chain-get-egs-mtlae $ivector_opts --srand=$srand --num-targets=$num_targets \
         --frame-weight-dae=$frame_weight_dae --frame-subsampling-factor-dae=$frame_subsampling_factor_dae \
         --frame-weight-dspae=$frame_weight_dspae --frame-subsampling-factor-dspae=$frame_subsampling_factor_dspae \
+        --length-tolerance=$length_tolerance \
         $egs_opts --normalization-fst-scale=$normalization_fst_scale \
         $trans_mdl_opt $chaindir/normalization.fst \
         "$valid_feats" ark,s,cs:- "$valid_targets_dae" "$valid_targets_dspae" "ark:$dir/valid_all.cegs" || exit 1
@@ -458,6 +460,7 @@ if [ $stage -le 2 ]; then
       nnet3-chain-get-egs-mtlae $ivector_opts --srand=$srand --num-targets=$num_targets \
         --frame-weight-dae=$frame_weight_dae --frame-subsampling-factor-dae=$frame_subsampling_factor_dae \
         --frame-weight-dspae=$frame_weight_dspae --frame-subsampling-factor-dspae=$frame_subsampling_factor_dspae \
+        --length-tolerance=$length_tolerance \
         $egs_opts --normalization-fst-scale=$normalization_fst_scale \
         $trans_mdl_opt $chaindir/normalization.fst \
         "$train_subset_feats" ark,s,cs:- "$train_subset_targets_dae" "$train_subset_targets_dspae" "ark:$dir/train_subset_all.cegs" || exit 1
@@ -527,6 +530,7 @@ if [ $stage -le 4 ]; then
     nnet3-chain-get-egs-mtlae $ivector_opts --srand=\$[JOB+$srand] $egs_opts --num-targets=$num_targets \
       --frame-weight-dae=$frame_weight_dae --frame-subsampling-factor-dae=$frame_subsampling_factor_dae \
       --frame-weight-dspae=$frame_weight_dspae --frame-subsampling-factor-dspae=$frame_subsampling_factor_dspae \
+      --length-tolerance=$length_tolerance \
       --num-frames-overlap=$frames_overlap_per_eg $trans_mdl_opt \
      "$feats" ark,s,cs:- "$targets_dae" "$targets_dspae" ark:- \| \
     nnet3-chain-copy-egs --random=true --srand=\$[JOB+$srand] ark:- $egs_list || exit 1;
