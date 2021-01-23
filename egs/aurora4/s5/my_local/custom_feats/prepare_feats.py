@@ -30,8 +30,10 @@ def prepare_clean_noisy(output_dir):
 
         print(f"Processing {data_set}...")
         if data_set.startswith("train"):
-            with ReadHelper(f"scp:data/{train_set}/feats.scp") as reader_noisy, \
-                    ReadHelper(f"scp:data/{target_set}/feats.scp") as reader_clean:
+            multi_set = data_set
+            clean_set = data_set.replace("multi", "clean")
+            with ReadHelper(f"scp:data/{multi_set}/feats.scp") as reader_noisy, \
+                    ReadHelper(f"scp:data/{clean_set}/feats.scp") as reader_clean:
                     for (key_noisy, array_noisy), (key_clean, array_clean) in zip(reader_noisy, reader_clean):
                         clean_noisy_mfcc[key_noisy] = np.concatenate((array_clean, array_noisy), axis=1) # [#, 40]
         else:
@@ -75,19 +77,89 @@ def prepare_denoised_noisy(mdl, iter, denoised_dir, output_dir):
         cp_basic_files(f"data/{data_set}", f"{output_dir}/{data_set}")
 
 
+def prepare_noise_noisy(output_dir):
+    for data_set in ["train_si84_multi_sp_hires",
+                     "test_A_hires", "test_B_hires", "test_C_hires", "test_D_hires"]:
+        noise_noisy_mfcc = dict()
+
+        print(f"Processing {data_set}...")
+
+        multi_set = data_set
+        if data_set.startswith("train"):
+            noise_set = "train_si84_noise_mismatch_sp_hires"
+        else:
+            noise_set = data_set.replace("_hires", "_noise_mismatch_hires")
+        
+        with ReadHelper(f"scp:data/{noise_set}/feats.scp") as reader_noise, \
+                ReadHelper(f"scp:data/{multi_set}/feats.scp") as reader_noisy:
+                for (key_noise, array_noise), (key_noisy, array_noisy) in zip(reader_noise, reader_noisy):
+                    noise_noisy_mfcc[key_noisy] = np.concatenate((array_noise, array_noisy), axis=1) # [#, 40]
+        
+        print("Dumping to files...") 
+        dump_mfcc(noise_noisy_mfcc, f"{output_dir}/{data_set}/mfcc/raw_mfcc")
+        copyfile(f"{output_dir}/{data_set}/mfcc/raw_mfcc.scp", f"{output_dir}/{data_set}/feats.scp")
+        cp_basic_files(f"data/{data_set}", f"{output_dir}/{data_set}")
+
+
+def prepare_clean_noise_noisy(output_dir):
+    clean_mfcc = dict() # test data would use
+
+    for data_set in ["train_si84_multi_sp_hires",
+                     "test_A_hires", "test_B_hires", "test_C_hires", "test_D_hires"]:
+        clean_noise_noisy_mfcc = dict()
+
+        print(f"Processing {data_set}...")
+
+        multi_set = data_set
+        if data_set.startswith("train"):
+            clean_set = data_set.replace("multi", "clean")
+            noise_set = "train_si84_noise_mismatch_sp_hires"
+
+            with ReadHelper(f"scp:data/{clean_set}/feats.scp") as reader_clean, \
+                    ReadHelper(f"scp:data/{noise_set}/feats.scp") as reader_noise, \
+                    ReadHelper(f"scp:data/{multi_set}/feats.scp") as reader_noisy:
+                for (key_clean, array_clean), (key_noise, array_noise), (key_noisy, array_noisy) in zip(reader_clean, reader_noise, reader_noisy):
+                    clean_noise_noisy_mfcc[key_noisy] = np.concatenate((array_clean, array_noise, array_noisy), axis=1) # [#, 40]
+    
+        else:
+            noise_set = data_set.replace("_hires", "_noise_mismatch_hires")
+        
+            with ReadHelper(f"scp:data/{noise_set}/feats.scp") as reader_noise, \
+                    ReadHelper(f"scp:data/{multi_set}/feats.scp") as reader_noisy:
+                    for (key_noise, array_noise), (key_noisy, array_noisy) in zip(reader_noise, reader_noisy):
+                        if key_noisy.endswith("0"):
+                            clean_mfcc[key_noisy] = array_noisy
+                            array_clean = array_noisy
+                        else:
+                            clean_key = key_noisy[:-1] + "0"
+                            array_clean = clean_mfcc[clean_key]
+                        clean_noise_noisy_mfcc[key_noisy] = np.concatenate((array_clean, array_noise, array_noisy), axis=1) # [#, 40]
+  
+        print("Dumping to files...") 
+        dump_mfcc(clean_noise_noisy_mfcc, f"{output_dir}/{data_set}/mfcc/raw_mfcc")
+        copyfile(f"{output_dir}/{data_set}/mfcc/raw_mfcc.scp", f"{output_dir}/{data_set}/feats.scp")
+        cp_basic_files(f"data/{data_set}", f"{output_dir}/{data_set}")
+
+
 def main(args, output_dir):
     if args.kind == "clean_noisy":
         prepare_clean_noisy(output_dir)
     elif args.kind == "denoised_noisy":
         assert args.denoised_mdl
         prepare_denoised_noisy(args.denoised_mdl, args.denoised_mdl_iter, args.denoised_dir, output_dir)
-
+    elif args.kind == "noise_noisy":
+        prepare_noise_noisy(output_dir)
+    elif args.kind == "clean_noise_noisy":
+        prepare_clean_noise_noisy(output_dir)
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kind",
                         help="'clean_noisy' is 40-D clean and 40-D noisy MFCC; "\
-                             "'denoised_noisy' is 40-D denoised and 40-D noisy MFCC")
+                             "'denoised_noisy' is 40-D denoised and 40-D noisy MFCC; "\
+                             "'noise_noisy' is 40-D noise and 40-D noisy MFCC; "\
+                             "'clean_noise_noisy' is 40-D clean, 40-D noise abd 40-D noisy")
     parser.add_argument("output_dir", default="my_data", type=Path, nargs="?")
 
     # MDL: /mnt/HDD2/user_pinyuanc/kaldi/egs/aurora4/s5/exp/nnet3/denoising_autoencoder/baseline/e10_il0.001_fl0.0001
