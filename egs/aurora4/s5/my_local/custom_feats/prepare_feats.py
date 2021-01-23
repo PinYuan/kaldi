@@ -59,7 +59,7 @@ def prepare_denoised_noisy(mdl, iter, denoised_dir, output_dir):
         else: nj = 8
     
         print(f"Computing [{data_set}] denoised MFCC...")
-        p = subprocess.Popen(f"./my_local/80d_feats/compute_denoised.sh --mdl {mdl} --iter {iter} --nj {nj} " + \
+        p = subprocess.Popen(f"./my_local/custom_feats/compute_denoised.sh --mdl {mdl} --iter {iter} --nj {nj} " + \
                             f"--data-set {data_set} --output-dir {denoised_dir}/{data_set}", shell=True)
         p.communicate()
       
