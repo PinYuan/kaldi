@@ -61,6 +61,13 @@ for x in $(seq -f "%02g" 01 14); do
     | $local/aurora2flist.pl $AURORA | sort -u > dev_1206_${x}.flist
 done
 
+#Dev Set (custom 10 speaker, each 33 utterances)
+for x in $(seq -f "%02g" 01 14); do
+  # Dev-set 1 (330x14 utterances)
+  cat $AURORA/lists/devtest${x}_0330a_16k.list \
+    | $local/aurora2flist.pl $AURORA | sort -u > dev_0330a_${x}.flist
+done
+
 #Test Set
 for x in $(seq -f "%02g" 01 14); do
   # test set 1 (166x14 utterances)
@@ -96,9 +103,12 @@ cat ${x}_tmp.trans1 | awk '{printf("%s1 ", $1); for(i=2;i<=NF;i++) printf("%s ",
 # Trans and sph for Dev Set
 for x in $(seq -f "%02g" 01 14); do
   $local/flist2scp_12.pl dev_0330_${x}.flist | sort > dev_0330_${x}_sph_tmp.scp
+  $local/flist2scp_12.pl dev_0330a_${x}.flist | sort > dev_0330a_${x}_sph_tmp.scp
   $local/flist2scp_12.pl dev_1206_${x}.flist | sort > dev_1206_${x}_sph_tmp.scp
   cat dev_0330_${x}_sph_tmp.scp | awk '{print $1}' \
     | $local/find_transcripts.pl dot_files.flist > dev_0330_${x}_tmp.trans1
+  cat dev_0330a_${x}_sph_tmp.scp | awk '{print $1}' \
+    | $local/find_transcripts.pl dot_files.flist > dev_0330a_${x}_tmp.trans1
   cat dev_1206_${x}_sph_tmp.scp | awk '{print $1}' \
     | $local/find_transcripts.pl dot_files.flist > dev_1206_${x}_tmp.trans1
   cat dev_0330_${x}_sph_tmp.scp | perl -e \
@@ -123,6 +133,29 @@ for x in $(seq -f "%02g" 01 14); do
       print $A[0].$suffix." ".$A[1]."\n"; 
     }
   ' $x > dev_0330_${x}_sph.scp 
+
+  cat dev_0330a_${x}_sph_tmp.scp | perl -e \
+  ' $condition="$ARGV[0]";
+    if ($condition eq "01") {$suffix=0;}
+    elsif ($condition eq "02") {$suffix=1;} 
+    elsif ($condition eq "03") {$suffix=2;} 
+    elsif ($condition eq "04") {$suffix=3;} 
+    elsif ($condition eq "05") {$suffix=4;} 
+    elsif ($condition eq "06") {$suffix=5;} 
+    elsif ($condition eq "07") {$suffix=6;} 
+    elsif ($condition eq "08") {$suffix=7;} 
+    elsif ($condition eq "09") {$suffix=8;} 
+    elsif ($condition eq "10") {$suffix=9;} 
+    elsif ($condition eq "11") {$suffix=a;} 
+    elsif ($condition eq "12") {$suffix=b;} 
+    elsif ($condition eq "13") {$suffix=c;} 
+    elsif ($condition eq "14") {$suffix=d;} 
+    else {print STDERR "error condition $condition\n";}
+    while(<STDIN>) {
+      @A=split(" ", $_);  
+      print $A[0].$suffix." ".$A[1]."\n"; 
+    }
+  ' $x > dev_0330a_${x}_sph.scp 
   
   cat dev_1206_${x}_sph_tmp.scp | perl -e \
   ' $condition="$ARGV[0]";
@@ -171,6 +204,31 @@ for x in $(seq -f "%02g" 01 14); do
       print "\n";
     }
   ' $x > dev_0330_${x}.trans1
+
+  cat dev_0330a_${x}_tmp.trans1 | perl -e \
+  ' $condition="$ARGV[0]";
+    if ($condition eq "01") {$suffix=0;}
+    elsif ($condition eq "02") {$suffix=1;} 
+    elsif ($condition eq "03") {$suffix=2;} 
+    elsif ($condition eq "04") {$suffix=3;} 
+    elsif ($condition eq "05") {$suffix=4;} 
+    elsif ($condition eq "06") {$suffix=5;} 
+    elsif ($condition eq "07") {$suffix=6;} 
+    elsif ($condition eq "08") {$suffix=7;} 
+    elsif ($condition eq "09") {$suffix=8;} 
+    elsif ($condition eq "10") {$suffix=9;} 
+    elsif ($condition eq "11") {$suffix=a;} 
+    elsif ($condition eq "12") {$suffix=b;} 
+    elsif ($condition eq "13") {$suffix=c;} 
+    elsif ($condition eq "14") {$suffix=d;} 
+    else {print STDERR "error condition $condition";}
+    while(<STDIN>) {
+      @A=split(" ", $_);  
+      print $A[0].$suffix;
+      for ($i=1; $i < @A; $i++) {print " ".$A[$i];}
+      print "\n";
+    }
+  ' $x > dev_0330a_${x}.trans1
  
   cat dev_1206_${x}_tmp.trans1 | perl -e \
   ' $condition="$ARGV[0]";
@@ -200,8 +258,10 @@ for x in $(seq -f "%02g" 01 14); do
 done
 
 cat dev_0330_*_sph.scp | sort -k1 > dev_0330_sph.scp 
+cat dev_0330a_*_sph.scp | sort -k1 > dev_0330a_sph.scp 
 cat dev_1206_*_sph.scp | sort -k1 > dev_1206_sph.scp
 cat dev_0330_??.trans1 | sort -k1 > dev_0330.trans1
+cat dev_0330a_??.trans1 | sort -k1 > dev_0330a.trans1
 cat dev_1206_??.trans1 | sort -k1 > dev_1206.trans1
 
 
@@ -330,19 +390,19 @@ cat $(ls | grep "test.*_09.trans1\|test.*_1[0-4].trans1") | sort -k1 | uniq > te
 # that will be done inside the training scripts, as we'd like to make the
 # data-preparation stage independent of the specific lexicon used.
 noiseword="<NOISE>";
-for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206 test_A test_B test_C test_D; do
+for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_0330a dev_1206 test_A test_B test_C test_D; do
   cat $x.trans1 | $local/normalize_transcript.pl $noiseword \
     | sort > $x.txt || exit 1;
 done
 
 # Create scp's with wav's. (the wv1 in the distribution is not really wav, it is sph.)
-for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206 test_A test_B test_C test_D; do
+for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_0330a dev_1206 test_A test_B test_C test_D; do
   awk '{printf("%s sox -B -r 16k -e signed -b 16 -c 1 -t raw %s -t wav - |\n", $1, $2);}' < ${x}_sph.scp \
     > ${x}_wav.scp
 done
 
 # Make the utt2spk and spk2utt files.
-for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206 test_A test_B test_C test_D; do
+for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_0330a dev_1206 test_A test_B test_C test_D; do
   cat ${x}_sph.scp | awk '{print $1}' \
     | perl -ane 'chop; m:^...:; print "$_ $&\n";' > $x.utt2spk
   cat $x.utt2spk | $utils/utt2spk_to_spk2utt.pl > $x.spk2utt || exit 1;
