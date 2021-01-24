@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 1a is same as 1h setup in WSJ
-# spec-augment 可參考 mini_librispeech 1j (ivector scale可調)
+# feam model + spec-augment before dae
 
 # local/chain/compare_wer.sh exp/chain/tdnn1a_sp
 # System                  tdnn1a_sp
@@ -20,7 +20,7 @@ set -e -o pipefail
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=12
+stage=15
 nj=30
 train_set=train_si84_multi
 target_set=train_si84_clean
@@ -56,10 +56,12 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=false
-num_of_epoch=70
+num_of_epoch=20
+frame_weight_dae=0.04
+frame_weight_dspae=0.04
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
-argu_desc="e${num_of_epoch}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -95,12 +97,14 @@ local/nnet3/run_ivector_common_feam.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/MIXUP/AM_SPECAUG/tdnn_1a/${argu_desc}
+dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/tdnn_1a_nivec/sad_feam_mtlae_mfcc_v1/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
+train_nivector_dir=my_data/ni_vector/sad/nivectors_${train_set}_sp_hires/conf_1.0
 lores_train_data_dir=data/${train_set}_sp
 
-target_scp=data/${target_set}_sp_hires/feats.target.scp
+target_scp_dae=data/${target_set}_sp_hires/feats.target.scp
+target_scp_dspae=data/train_si84_noise_mismatch_sp_hires/feats.scp
 
 # note: you don't necessarily have to change the treedir name
 # each time you do a new experiment-- only if you change the
@@ -181,15 +185,37 @@ if [ $stage -le 12 ]; then
 
   mkdir -p $dir/configs
   cat <<EOF > $dir/configs/network.xconfig
-  input dim=100 name=ivector
+  input dim=180 name=ivector
   input dim=40 name=input
+  
+  # Denoise Autoencoder + deSpeech Autoencoder
+  relu-renorm-layer name=tdnn1 dim=1024
 
+  relu-renorm-layer name=tdnn2-dae dim=256 input=tdnn1
+  relu-renorm-layer name=tdnn2-shared dim=768 input=tdnn1
+  relu-renorm-layer name=tdnn2-dspae dim=256 input=tdnn1
+
+  relu-renorm-layer name=tdnn3-dae dim=512 input=Append(tdnn2-dae, tdnn2-shared)
+  relu-renorm-layer name=tdnn3-shared dim=512 input=Append(tdnn2-dae, tdnn2-shared, tdnn2-dspae)
+  relu-renorm-layer name=tdnn3-dspae dim=512 input=Append(tdnn2-shared, tdnn2-dspae)
+
+  relu-renorm-layer name=tdnn4-dae dim=768 input=Append(tdnn3-dae, tdnn3-shared)
+  relu-renorm-layer name=tdnn4-shared dim=256 input=Append(tdnn3-dae, tdnn3-shared, tdnn3-dspae)
+  relu-renorm-layer name=tdnn4-dspae dim=768 input=Append(tdnn3-shared, tdnn3-dspae)
+
+  relu-renorm-layer name=tdnn5-dae dim=1024 input=Append(tdnn4-dae, tdnn4-shared)
+  relu-renorm-layer name=tdnn5-dspae dim=1024 input=Append(tdnn4-shared, tdnn4-dspae)
+
+  affine-layer name=prefinal-dae dim=40 input=tdnn5-dae
+  affine-layer name=prefinal-dspae dim=40 input=tdnn5-dspae
+
+  output name=output-dae objective-type=quadratic input=prefinal-dae
+  output name=output-dspae objective-type=quadratic input=prefinal-dspae
+
+  # AM
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
-  batchnorm-component name=batchnorm0 input=idct
-  spec-augment-layer name=spec-augment freq-max-proportion=0.5 time-zeroed-proportion=0.2 time-mask-max-frames=20
-
-  delta-layer name=delta input=spec-augment
-  no-op-component name=input2 input=Append(delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  delta-layer name=delta input=idct
+  no-op-component name=input2 input=Append(prefinal-dae@-1,prefinal-dae@0,prefinal-dae@1, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2
@@ -223,15 +249,16 @@ if [ $stage -le 13 ]; then
      /export/b0{3,4,5,6}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/nnet3/chain/train_mixup.py --stage=$train_stage \
+  steps/chain/train_mtlae.py --stage=$train_stage \
     --cmd="$train_cmd" \
-    --feat.online-ivector-dir=$train_ivector_dir \
+    --feat.online-ivector-dir=$train_nivector_dir \
     --feat.cmvn-opts="--norm-means=false --norm-vars=false" \
     --chain.xent-regularize $xent_regularize \
     --chain.leaky-hmm-coefficient=0.1 \
     --chain.l2-regularize=0.0 \
     --chain.apply-deriv-weights=false \
     --chain.lm-opts="--num-extra-lm-states=2000" \
+    --chain.length-tolerance=100000 \
     --trainer.dropout-schedule $dropout_schedule \
     --trainer.add-option="--optimization.memory-compression-level=2" \
     --trainer.srand=$srand \
@@ -247,15 +274,19 @@ if [ $stage -le 13 ]; then
     --egs.chunk-width=$chunk_width \
     --egs.chunk-left-context=0 \
     --egs.chunk-right-context=0 \
+    --egs.frame-weight-dae=$frame_weight_dae \
+    --egs.frame-weight-dspae=$frame_weight_dspae \
     --egs.dir="$common_egs_dir" \
     --egs.opts="--frames-overlap-per-eg 0" \
     --cleanup.remove-egs=$remove_egs \
-    --cleanup.preserve-model-interval=10 \
+    --cleanup.preserve-model-interval 5 \
     --use-gpu=wait \
     --reporting.email="$reporting_email" \
     --feat-dir=$train_data_dir \
     --tree-dir=$tree_dir \
     --lat-dir=$lat_dir \
+    --target_scp_dae=$target_scp_dae \
+    --target_scp_dspae=$target_scp_dspae \
     --dir=$dir  || exit 1;
 fi
 
@@ -291,7 +322,8 @@ if [ $stage -le 15 ]; then
           --extra-right-context-final 0 \
           --frames-per-chunk $frames_per_chunk \
           --nj $nspk --cmd "$decode_cmd"  --num-threads 4 \
-          --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${data}_hires \
+          --hack-nvector true \
+          --online-ivector-dir my_data/ni_vector/sad/nivectors_${data}_hires/conf_1.0 \
           $tree_dir/graph_${lmtype} data/${data}_hires ${dir}/decode_${lmtype}_${data_affix} || exit 1
       done
 

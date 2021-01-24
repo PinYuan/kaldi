@@ -57,7 +57,7 @@ chunk_right_context=0
 srand=0
 remove_egs=false
 num_of_epoch=20
-frame_weight=0.2
+frame_weight=0.04
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
 argu_desc="e${num_of_epoch}_f${frame_weight}_il${initial_effective_lrate}_fl${final_effective_lrate}"
@@ -258,6 +258,7 @@ if [ $stage -le 13 ]; then
     --egs.dir="$common_egs_dir" \
     --egs.opts="--frames-overlap-per-eg 0" \
     --cleanup.remove-egs=$remove_egs \
+    --cleanup.preserve-model-interval=5 \
     --use-gpu=wait \
     --reporting.email="$reporting_email" \
     --feat-dir=$train_data_dir \

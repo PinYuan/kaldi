@@ -56,7 +56,7 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=false
-num_of_epoch=20
+num_of_epoch=30
 frame_weight=0.2
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
@@ -260,6 +260,7 @@ if [ $stage -le 13 ]; then
     --cleanup.remove-egs=$remove_egs \
     --use-gpu=wait \
     --reporting.email="$reporting_email" \
+    --cleanup.preserve-model-interval=5 \
     --feat-dir=$train_data_dir \
     --tree-dir=$tree_dir \
     --lat-dir=$lat_dir \

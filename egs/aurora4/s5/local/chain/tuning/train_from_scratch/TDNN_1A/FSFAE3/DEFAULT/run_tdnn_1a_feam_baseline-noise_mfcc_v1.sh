@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 1a is same as 1h setup in WSJ
-# spec-augment 可參考 mini_librispeech 1j (ivector scale可調)
+# feam model + spec-augment before dae
 
 # local/chain/compare_wer.sh exp/chain/tdnn1a_sp
 # System                  tdnn1a_sp
@@ -56,10 +56,11 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=false
-num_of_epoch=70
+num_of_epoch=20
+frame_weight=0.04
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
-argu_desc="e${num_of_epoch}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_f${frame_weight}_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -95,12 +96,12 @@ local/nnet3/run_ivector_common_feam.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/MIXUP/AM_SPECAUG/tdnn_1a/${argu_desc}
+dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/tdnn_1a_feam_baseline-noise_mfcc_v1/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp
 
-target_scp=data/${target_set}_sp_hires/feats.target.scp
+target_scp=data/train_si84_noise_mismatch_sp_hires/feats.scp
 
 # note: you don't necessarily have to change the treedir name
 # each time you do a new experiment-- only if you change the
@@ -183,13 +184,19 @@ if [ $stage -le 12 ]; then
   cat <<EOF > $dir/configs/network.xconfig
   input dim=100 name=ivector
   input dim=40 name=input
+  
+  # Denoise Autoencoder
+  # Copy from aspire/s5/local/nnet3/run_autoencoder.sh
+  relu-renorm-layer name=tdnn1 dim=1024 input=Append(-2,-1,0,1,2)
+  relu-renorm-layer name=tdnn2 dim=1024 input=Append(-1,2)
+  relu-renorm-layer name=tdnn3 dim=1024 input=Append(-3,3)
+  relu-renorm-layer name=tdnn4 dim=1024 input=Append(-7,2)
+  affine-layer name=prefinal-ae dim=40
+  output name=output_ae objective-type=quadratic input=prefinal-ae
 
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
-  batchnorm-component name=batchnorm0 input=idct
-  spec-augment-layer name=spec-augment freq-max-proportion=0.5 time-zeroed-proportion=0.2 time-mask-max-frames=20
-
-  delta-layer name=delta input=spec-augment
-  no-op-component name=input2 input=Append(delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  delta-layer name=delta input=idct
+  no-op-component name=input2 input=Append(prefinal-ae@-1,prefinal-ae@0,prefinal-ae@1, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2
@@ -223,7 +230,7 @@ if [ $stage -le 13 ]; then
      /export/b0{3,4,5,6}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/nnet3/chain/train_mixup.py --stage=$train_stage \
+  steps/chain/train_dcae.py --stage=$train_stage \
     --cmd="$train_cmd" \
     --feat.online-ivector-dir=$train_ivector_dir \
     --feat.cmvn-opts="--norm-means=false --norm-vars=false" \
@@ -247,15 +254,16 @@ if [ $stage -le 13 ]; then
     --egs.chunk-width=$chunk_width \
     --egs.chunk-left-context=0 \
     --egs.chunk-right-context=0 \
+    --egs.frame-weight=$frame_weight \
     --egs.dir="$common_egs_dir" \
     --egs.opts="--frames-overlap-per-eg 0" \
     --cleanup.remove-egs=$remove_egs \
-    --cleanup.preserve-model-interval=10 \
     --use-gpu=wait \
     --reporting.email="$reporting_email" \
     --feat-dir=$train_data_dir \
     --tree-dir=$tree_dir \
     --lat-dir=$lat_dir \
+    --target_scp=$target_scp \
     --dir=$dir  || exit 1;
 fi
 

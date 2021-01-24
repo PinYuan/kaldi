@@ -56,7 +56,7 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=false
-num_of_epoch=25
+num_of_epoch=20
 frame_weight_dae=0.04
 frame_weight_dspae=0.04
 initial_effective_lrate=0.01
@@ -277,6 +277,7 @@ if [ $stage -le 13 ]; then
     --egs.dir="$common_egs_dir" \
     --egs.opts="--frames-overlap-per-eg 0" \
     --cleanup.remove-egs=$remove_egs \
+    --cleanup.preserve-model-interval=5 \
     --use-gpu=wait \
     --reporting.email="$reporting_email" \
     --feat-dir=$train_data_dir \
