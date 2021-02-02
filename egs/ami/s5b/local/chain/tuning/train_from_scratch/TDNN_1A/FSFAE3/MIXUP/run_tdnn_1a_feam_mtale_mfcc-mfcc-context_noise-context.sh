@@ -92,7 +92,7 @@ if $use_ihm_ali; then
   lores_train_data_dir=data/$mic/${train_set}_ihmdata_sp_comb
   tree_dir=exp/$mic/chain${nnet3_affix}/tree_bi${tree_affix}_ihmdata
   lat_dir=exp/$mic/chain${nnet3_affix}/${gmm}_${train_set}_sp_comb_lats_ihmdata
-  dir=exp/$mic/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/MIXUP/tdnn_1a_feam_mtlae_mfcc-mfcc-context_noise-context/${argu_desc}
+  dir=exp/$mic/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/MIXUP/tdnn_1a_feam_mtlae_fbank-mfcc-context_noise-context/${argu_desc}
   # note: the distinction between when we use the 'ihmdata' suffix versus
   # 'ihmali' is pretty arbitrary.
 else
@@ -222,7 +222,8 @@ if [ $stage -le 15 ]; then
 
   # AM
   delta-layer name=delta input=idct
-  no-op-component name=input2 input=Append(prefinal-dae@-1,prefinal-dae@0,prefinal-dae@1, prefinal-dspae@-1,prefinal-dspae@0,prefinal-dspae@1, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
+  no-op-component name=input2 input=Append(context-dae, prefinal-dspae@-1,prefinal-dspae@0,prefinal-dspae@1, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2

@@ -210,12 +210,12 @@ if [ $stage -le 12 ]; then
   output name=output-dae objective-type=quadratic input=prefinal-dae
   output name=output-dspae objective-type=quadratic input=prefinal-dspae
 
-  attention-relu-renorm-layer name=attention-dspae input=prefinal-dspae time-stride=3 num-heads=5 value-dim=40 key-dim=20 num-left-inputs=5 num-right-inputs=2
-
   # AM
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
-  no-op-component name=input2 input=Append(prefinal-dae@-1,prefinal-dae@0,prefinal-dae@1, attention-dspae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
+  attention-relu-renorm-layer name=attention-dspae input=prefinal-dspae time-stride=3 num-heads=5 value-dim=40 key-dim=20 num-left-inputs=5 num-right-inputs=2
+  no-op-component name=input2 input=Append(context-dae, attention-dspae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2

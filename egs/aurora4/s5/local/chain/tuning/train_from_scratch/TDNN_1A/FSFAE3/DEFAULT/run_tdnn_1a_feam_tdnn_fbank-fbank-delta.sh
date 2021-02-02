@@ -196,10 +196,10 @@ if [ $stage -le 12 ]; then
   affine-layer name=prefinal-ae dim=40
   output name=output_ae objective-type=quadratic input=prefinal-ae
 
-  delta-layer name=delta-denoised input=prefinal-ae
-
+  # AM
   delta-layer name=delta input=idct
-  no-op-component name=input2 input=Append(delta-denoised, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  delta-layer name=delta-dae input=prefinal-ae
+  no-op-component name=input2 input=Append(delta-dae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2

@@ -193,9 +193,21 @@ if [ $stage -le 15 ]; then
   input dim=100 name=ivector
   input dim=40 name=input
   
+  # Denoise Autoencoder
+  # Copy from aspire/s5/local/nnet3/run_autoencoder.sh
+  relu-renorm-layer name=tdnn1 dim=1024 input=Append(-2,-1,0,1,2)
+  relu-renorm-layer name=tdnn2 dim=1024 input=Append(-1,2)
+  relu-renorm-layer name=tdnn3 dim=1024 input=Append(-3,3)
+  relu-renorm-layer name=tdnn4 dim=1024 input=Append(-7,2)
+  relu-renorm-layer name=tdnn5 dim=1024
+  affine-layer name=prefinal-ae dim=40
+  output-layer name=output_ae objective-type=quadratic input=prefinal-ae
+
+  # AM
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
-  no-op-component name=input2 input=Append(prefinal-ae@-1,prefinal-ae@0,prefinal-ae@1,delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
+  no-op-component name=input2 input=Append(context-dae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn6 $tdnn_opts dim=1024 input=input2

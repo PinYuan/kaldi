@@ -210,14 +210,13 @@ if [ $stage -le 12 ]; then
   output name=output-dae objective-type=quadratic input=prefinal-dae
   output name=output-dspae objective-type=quadratic input=prefinal-dspae
 
-  no-op-component name=input-dae input=Append(prefinal-dae@-1,prefinal-dae@0,prefinal-dae@1)
-  stats-layer name=dspae-stats config=mean+stddev(-99:3:9:99) input=prefinal-dspae
-  no-op-component name=input-dspae input=Append(prefinal-dspae@-1,prefinal-dspae@0,prefinal-dspae@1, dspae-stats)
-
   # AM
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
-  no-op-component name=input2 input=Append(input-dae, input-dspae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
+  stats-layer name=stats-dspae config=mean+stddev(-99:3:9:99) input=prefinal-dspae
+  no-op-component name=context-stats-dspae input=Append(prefinal-dspae@-1,prefinal-dspae@0,prefinal-dspae@1, stats-dspae)
+  no-op-component name=input2 input=Append(context-dae, dspae-context-stats, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2
