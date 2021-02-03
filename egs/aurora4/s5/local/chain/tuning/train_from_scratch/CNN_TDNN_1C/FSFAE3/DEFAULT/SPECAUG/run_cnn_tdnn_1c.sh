@@ -27,7 +27,6 @@ set -e -o pipefail
 stage=15
 nj=30
 train_set=train_si84_multi
-target_set=train_si84_clean
 test_sets="test_A test_B test_C test_D"
 gmm=tri3b_multi  # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
@@ -50,12 +49,7 @@ chunk_width=140,100,160
 # training options
 srand=0
 remove_egs=true
-num_of_epoch=16
-frame_weight_dae=0.04
-frame_weight_dspae=0.04
-initial_effective_lrate=0.0005
-final_effective_lrate=0.00005
-argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_stats-900.1.1.900_il${initial_effective_lrate}_fl${final_effective_lrate}"
+num_of_epoch=8
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -83,16 +77,15 @@ local/nnet3/run_ivector_common.sh \
   --num-threads-ubm $num_threads_ubm \
   --nnet3-affix "$nnet3_affix"
 
+
+
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/CNN_TDNN_1C/FSFAE3/SPECAUG/feam_mtlae_fbank-mfcc-context_noise-stats/${argu_desc}
+dir=exp/chain${nnet3_affix}/train_from_scratch/CNN_TDNN_1C/FSFAE3/SPECAUG/cnn_tdnn_${affix}_sp/e${num_of_epoch}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp
-
-target_scp_dae=data/${target_set}_sp_hires/feats.target.scp
-target_scp_dspae=data/train_si84_noise_mismatch_sp_hires/feats.scp
 
 # note: you don't necessarily have to change the treedir name
 # each time you do a new experiment-- only if you change the
@@ -182,38 +175,13 @@ if [ $stage -le 15 ]; then
   batchnorm-component name=idct-batchnorm input=idct
   spec-augment-layer name=spec-augment freq-max-proportion=0.5 time-zeroed-proportion=0.2 time-mask-max-frames=20
 
-  # Denoise Autoencoder + deSpeech Autoencoder
-  relu-renorm-layer name=tdnn1 dim=1024
-
-  relu-renorm-layer name=tdnn2-dae dim=256 input=tdnn1
-  relu-renorm-layer name=tdnn2-shared dim=768 input=tdnn1
-  relu-renorm-layer name=tdnn2-dspae dim=256 input=tdnn1
-
-  relu-renorm-layer name=tdnn3-dae dim=512 input=Append(tdnn2-dae, tdnn2-shared)
-  relu-renorm-layer name=tdnn3-shared dim=512 input=Append(tdnn2-dae, tdnn2-shared, tdnn2-dspae)
-  relu-renorm-layer name=tdnn3-dspae dim=512 input=Append(tdnn2-shared, tdnn2-dspae)
-
-  relu-renorm-layer name=tdnn4-dae dim=768 input=Append(tdnn3-dae, tdnn3-shared)
-  relu-renorm-layer name=tdnn4-shared dim=256 input=Append(tdnn3-dae, tdnn3-shared, tdnn3-dspae)
-  relu-renorm-layer name=tdnn4-dspae dim=768 input=Append(tdnn3-shared, tdnn3-dspae)
-
-  relu-renorm-layer name=tdnn5-dae dim=1024 input=Append(tdnn4-dae, tdnn4-shared)
-  relu-renorm-layer name=tdnn5-dspae dim=1024 input=Append(tdnn4-shared, tdnn4-dspae)
-
-  affine-layer name=prefinal-dae dim=40 input=tdnn5-dae
-  affine-layer name=prefinal-dspae dim=40 input=tdnn5-dspae
-
-  output name=output-dae objective-type=quadratic input=prefinal-dae
-  output name=output-dspae objective-type=quadratic input=prefinal-dspae
-
-  # AM  
+  # this takes the MFCCs and generates filterbank coefficients.  The MFCCs
+  # are more compressible so we prefer to dump the MFCCs to disk rather
+  # than filterbanks.
   linear-component name=ivector-linear $ivector_affine_opts dim=200 input=ReplaceIndex(ivector, t, 0)
   batchnorm-component name=ivector-batchnorm target-rms=0.025
 
-  no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
-  stats-layer name=stats-dspae config=mean+stddev(-900:1:1:900) input=prefinal-dspae
-  no-op-component name=info-dae-dspae input=Append(context-dae, stats-dspae)
-  combine-feature-maps-layer name=combine_inputs input=Append(spec-augment, ivector-batchnorm, info-dae-dspae) num-filters1=1 num-filters2=5 num-filters3=5 height=40
+  combine-feature-maps-layer name=combine_inputs input=Append(spec-augment, ivector-batchnorm) num-filters1=1 num-filters2=5 height=40
 
   conv-relu-batchnorm-layer name=cnn1 $cnn_opts height-in=40 height-out=40 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=48 learning-rate-factor=0.333 max-change=0.25
   conv-relu-batchnorm-layer name=cnn2 $cnn_opts height-in=40 height-out=40 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=48
@@ -251,7 +219,7 @@ if [ $stage -le 16 ]; then
      /export/b0{4,5,6,7}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/chain/train_mtlae.py --stage=$train_stage \
+  steps/nnet3/chain/train.py --stage=$train_stage \
     --cmd="$decode_cmd" \
     --feat.online-ivector-dir=$train_ivector_dir \
     --feat.cmvn-opts="--norm-means=false --norm-vars=false" \
@@ -267,13 +235,11 @@ if [ $stage -le 16 ]; then
     --trainer.frames-per-iter=3000000 \
     --trainer.optimization.num-jobs-initial=2 \
     --trainer.optimization.num-jobs-final=8 \
-    --trainer.optimization.initial-effective-lrate=$initial_effective_lrate \
-    --trainer.optimization.final-effective-lrate=$final_effective_lrate \
+    --trainer.optimization.initial-effective-lrate=0.0005 \
+    --trainer.optimization.final-effective-lrate=0.00005 \
     --trainer.num-chunk-per-minibatch=128,64 \
     --trainer.optimization.momentum=0.0 \
     --egs.chunk-width=$chunk_width \
-    --egs.frame-weight-dae=$frame_weight_dae \
-    --egs.frame-weight-dspae=$frame_weight_dspae \
     --egs.dir="$common_egs_dir" \
     --egs.opts="--frames-overlap-per-eg 0" \
     --cleanup.remove-egs=$remove_egs \
@@ -282,8 +248,6 @@ if [ $stage -le 16 ]; then
     --feat-dir=$train_data_dir \
     --tree-dir=$tree_dir \
     --lat-dir=$lat_dir \
-    --target_scp_dae=$target_scp_dae \
-    --target_scp_dspae=$target_scp_dspae \
     --dir=$dir  || exit 1;
 fi
 
@@ -316,7 +280,7 @@ if [ $stage -le 18 ]; then
     (
       data_affix=$(echo $data | sed s/test_//)
       nspk=$(wc -l <data/${data}_hires/spk2utt)
-      for lmtype in tgpr_5k bg; do
+      for lmtype in tgpr_5k tgpr; do
         steps/nnet3/decode.sh \
           --acwt 1.0 --post-decode-acwt 10.0 \
           --frames-per-chunk $frames_per_chunk \
@@ -356,19 +320,19 @@ if $test_online_decoding && [ $stage -le 19 ]; then
       nspk=$(wc -l <data/${data}_hires/spk2utt)
       # note: we just give it "data/${data}" as it only uses the wav.scp, the
       # feature type does not matter.
-      for lmtype in tgpr_5k bg; do
+      for lmtype in tgpr bd_tgpr; do
         steps/online/nnet3/decode.sh \
           --acwt 1.0 --post-decode-acwt 10.0 \
           --nj $nspk --cmd "$decode_cmd" \
           $tree_dir/graph_${lmtype} data/${data} ${dir}_online/decode_${lmtype}_${data_affix} || exit 1
       done
-      # steps/lmrescore.sh \
-      #   --self-loop-scale 1.0 \
-      #   --cmd "$decode_cmd" data/lang_test_{tgpr,tg} \
-      #   data/${data}_hires ${dir}_online/decode_{tgpr,tg}_${data_affix} || exit 1
-      # steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
-      #   data/lang_test_bd_{tgpr,fgconst} \
-      #  data/${data}_hires ${dir}_online/decode_${lmtype}_${data_affix}{,_fg} || exit 1
+      steps/lmrescore.sh \
+        --self-loop-scale 1.0 \
+        --cmd "$decode_cmd" data/lang_test_{tgpr,tg} \
+        data/${data}_hires ${dir}_online/decode_{tgpr,tg}_${data_affix} || exit 1
+      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
+        data/lang_test_bd_{tgpr,fgconst} \
+       data/${data}_hires ${dir}_online/decode_${lmtype}_${data_affix}{,_fg} || exit 1
     ) || touch $dir/.error &
   done
   wait

@@ -45,7 +45,7 @@
 set -e
 
 # configs for 'chain'
-stage=12
+stage=15
 nj=30
 train_stage=-10
 get_egs_stage=-10
@@ -97,7 +97,7 @@ train_set=train_si84_multi
 test_sets="test_A test_B test_C test_D"
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/baseline/tdnn_opgru_1b/e${num_of_epoch} # Note: _sp will get added to this if $speed_perturb == true.
+dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_OPGRU_1B/FSFAE3/DEFAULT/SPECAUG/tdnn_opgru_1b/e${num_of_epoch}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 tree_dir=exp/chain${nnet3_affix}/tree_a_sp
@@ -153,7 +153,12 @@ if [ $stage -le 12 ]; then
   input dim=100 name=ivector
   input dim=40 name=input
   
-  fixed-affine-layer name=lda input=Append(-2,-1,0,1,2, ReplaceIndex(ivector, t, 0)) affine-transform-file=$dir/configs/lda.mat
+  idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
+  batchnorm-component name=idct-batchnorm input=idct
+  spec-augment-layer name=spec-augment freq-max-proportion=0.5 time-zeroed-proportion=0.2 time-mask-max-frames=20
+
+  no-op-component name=context-acous input=Append(spec-augment@-2, spec-augment@-1, spec-augment@0, spec-augment@1, spec-augment@2)
+  affine-layer name=lda input=Append(context-acous, ReplaceIndex(ivector, t, 0))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn1 dim=1024

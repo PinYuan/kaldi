@@ -213,7 +213,8 @@ if [ $stage -le 15 ]; then
 
   no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
   stats-layer name=stats-dspae config=mean+stddev(-900:1:1:900) input=prefinal-dspae
-  combine-feature-maps-layer name=combine_inputs input=Append(idct-batchnorm, ivector-batchnorm, context-dae, stats-dspae) num-filters1=1 num-filters2=5 num-filters3=3 num-filters4=2 height=40
+  no-op-component name=info-dae-dspae input=Append(context-dae, stats-dspae)
+  combine-feature-maps-layer name=combine_inputs input=Append(idct-batchnorm, ivector-batchnorm, info-dae-dspae) num-filters1=1 num-filters2=5 num-filters3=5 height=40
 
   conv-relu-batchnorm-layer name=cnn1 $cnn_opts height-in=40 height-out=40 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=48 learning-rate-factor=0.333 max-change=0.25
   conv-relu-batchnorm-layer name=cnn2 $cnn_opts height-in=40 height-out=40 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=48

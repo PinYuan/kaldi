@@ -373,7 +373,7 @@ frame_weight_dae=0.04
 frame_weight_dspae=0.04
 initial_effective_lrate=0.0005
 final_effective_lrate=0.00005
-argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_stats-900:1:1:900_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_stats-900.1.1.900_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.

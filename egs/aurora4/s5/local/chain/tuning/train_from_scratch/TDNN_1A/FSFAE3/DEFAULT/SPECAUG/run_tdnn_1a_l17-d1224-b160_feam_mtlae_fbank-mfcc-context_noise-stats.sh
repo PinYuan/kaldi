@@ -96,7 +96,7 @@ local/nnet3/run_ivector_common.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/TDNN_1A/FSFAE3/DEFAULT/SPECAUG/tdnn_${affix}_l17-d1224-b160_feam_mtlae_fbank-mfcc-context_noise-stats/e${num_of_epoch}
+dir=exp/chain${nnet3_affix}/TDNN_1A/FSFAE3/DEFAULT/SPECAUG/tdnn_${affix}_l17-d1224-b160_feam_mtlae_fbank-mfcc-context_noise-stats/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp

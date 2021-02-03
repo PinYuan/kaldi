@@ -400,7 +400,7 @@ local/nnet3/run_ivector_common.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/baseline/tdnn_lstm${affix}_sp/e${num_of_epoch}
+dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_LSTM_1B/FSFAE3/DEFAULT/SPECAUG/tdnn_lstm${affix}_sp/e${num_of_epoch}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp
@@ -485,7 +485,12 @@ if [ $stage -le 15 ]; then
   input dim=100 name=ivector
   input dim=40 name=input
   
-  fixed-affine-layer name=lda delay=5 input=Append(-2,-1,0,1,2,ReplaceIndex(ivector, t, 0)) affine-transform-file=$dir/configs/lda.mat
+  idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
+  batchnorm-component name=idct-batchnorm input=idct
+  spec-augment-layer name=spec-augment freq-max-proportion=0.5 time-zeroed-proportion=0.2 time-mask-max-frames=20
+
+  no-op-component name=context-acous input=Append(spec-augment@-2, spec-augment@-1, spec-augment@0, spec-augment@1, spec-augment@2)
+  affine-layer name=lda input=Append(context-acous, ReplaceIndex(ivector, t, 0))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn1 $tdnn_opts dim=448
