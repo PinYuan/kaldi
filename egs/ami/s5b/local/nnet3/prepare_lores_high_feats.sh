@@ -21,7 +21,7 @@ min_seg_len=1.55  # min length in seconds... we do this because chain training
 use_ihm_ali=true # If true, we use alignments from the IHM data (which is better..
                   # don't set this to true if $mic is set to ihm.)
 train_set=train_cleaned   # you might set this to e.g. train_cleaned.
-hires_suffix= # 40 for 40D, 80 for 80D
+hires_suffix=40 # 40 for 40D, 80 for 80D
 
 . ./cmd.sh
 . ./path.sh

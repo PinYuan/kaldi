@@ -17,7 +17,8 @@ mic=ihm
 
 # Train systems,
 nj=30 # number of parallel jobs,
-stage=1
+stage=11
+gmm_decode=false
 . utils/parse_options.sh
 
 base_mic=$(echo $mic | sed 's/[0-9]//g') # sdm, ihm or mdm
@@ -26,7 +27,7 @@ nmics=$(echo $mic | sed 's/[a-z]//g') # e.g. 8 for mdm8.
 set -euo pipefail
 
 # Path where AMI gets downloaded (or where locally available):
-AMI_DIR=$PWD/wav_db # Default,
+AMI_DIR="/mnt/HDD/dataset/AMI" # $PWD/wav_db # Default,
 case $(hostname -d) in
   fit.vutbr.cz) AMI_DIR=/mnt/matylda5/iveselyk/KALDI_AMI_WAV ;; # BUT,
   clsp.jhu.edu) AMI_DIR=/export/corpora4/ami/amicorpus ;; # JHU,
@@ -124,13 +125,15 @@ if [ $stage -le 7 ]; then
   steps/align_fmllr.sh --nj $nj --cmd "$train_cmd" \
     data/$mic/train data/lang exp/$mic/tri2 exp/$mic/tri2_ali
   # Decode
-   graph_dir=exp/$mic/tri2/graph_${LM}
-  $decode_cmd --mem 4G $graph_dir/mkgraph.log \
-    utils/mkgraph.sh data/lang_${LM} exp/$mic/tri2 $graph_dir
-  steps/decode.sh --nj $nj --cmd "$decode_cmd" --config conf/decode.conf \
-    $graph_dir data/$mic/dev exp/$mic/tri2/decode_dev_${LM}
-  steps/decode.sh --nj $nj --cmd "$decode_cmd" --config conf/decode.conf \
-    $graph_dir data/$mic/eval exp/$mic/tri2/decode_eval_${LM}
+  if $gmm_decode ; then
+     graph_dir=exp/$mic/tri2/graph_${LM}
+    $decode_cmd --mem 4G $graph_dir/mkgraph.log \
+      utils/mkgraph.sh data/lang_${LM} exp/$mic/tri2 $graph_dir
+    steps/decode.sh --nj $nj --cmd "$decode_cmd" --config conf/decode.conf \
+      $graph_dir data/$mic/dev exp/$mic/tri2/decode_dev_${LM}
+    steps/decode.sh --nj $nj --cmd "$decode_cmd" --config conf/decode.conf \
+      $graph_dir data/$mic/eval exp/$mic/tri2/decode_eval_${LM}
+  fi
 fi
 
 
@@ -144,13 +147,15 @@ fi
 
 if [ $stage -le 9 ]; then
   # Decode the fMLLR system.
-  graph_dir=exp/$mic/tri3/graph_${LM}
-  $decode_cmd --mem 4G $graph_dir/mkgraph.log \
-    utils/mkgraph.sh data/lang_${LM} exp/$mic/tri3 $graph_dir
-  steps/decode_fmllr.sh --nj $nj --cmd "$decode_cmd" --config conf/decode.conf \
-    $graph_dir data/$mic/dev exp/$mic/tri3/decode_dev_${LM}
-  steps/decode_fmllr.sh --nj $nj --cmd "$decode_cmd" --config conf/decode.conf \
-    $graph_dir data/$mic/eval exp/$mic/tri3/decode_eval_${LM}
+  if  $gmm_decode ; then
+    graph_dir=exp/$mic/tri3/graph_${LM}
+    $decode_cmd --mem 4G $graph_dir/mkgraph.log \
+      utils/mkgraph.sh data/lang_${LM} exp/$mic/tri3 $graph_dir
+    steps/decode_fmllr.sh --nj $nj --cmd "$decode_cmd" --config conf/decode.conf \
+      $graph_dir data/$mic/dev exp/$mic/tri3/decode_dev_${LM}
+    steps/decode_fmllr.sh --nj $nj --cmd "$decode_cmd" --config conf/decode.conf \
+      $graph_dir data/$mic/eval exp/$mic/tri3/decode_eval_${LM}
+  fi
 fi
 
 if [ $stage -le 10 ]; then
@@ -175,6 +180,7 @@ if [ $stage -le 12 ]; then
 #  ali_opt=
 #  [ "$mic" != "ihm" ] && ali_opt="--use-ihm-ali true"
 # local/nnet3/run_tdnn.sh $ali_opt --mic $mic
+  echo "Pass"
 fi
 
 exit 0
