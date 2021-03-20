@@ -82,10 +82,10 @@ if [ $stage -le 5 ] && [ -f data/${train_set}_sp_hires/feats.scp ]; then
   exit 1
 fi
 
-if [ $stage -le 4 ]; then
-  echo "$0: preparing directory for speed-perturbed data"
-  utils/data/perturb_data_dir_speed_3way.sh data/${train_set} data/${train_set}_sp
-fi
+# if [ $stage -le 4 ]; then
+#   echo "$0: preparing directory for speed-perturbed data"
+#   utils/data/perturb_data_dir_speed_3way.sh data/${train_set} data/${train_set}_sp
+# fi
 
 if [ $stage -le 5 ]; then
   echo "$0: creating high-resolution MFCC features"

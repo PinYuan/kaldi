@@ -49,7 +49,7 @@ chunk_width=140,100,160
 # training options
 srand=0
 remove_egs=true
-num_of_epoch=8
+num_of_epoch=14
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -82,7 +82,7 @@ local/nnet3/run_ivector_common.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/CNN_TDNN_1C/FSFAE3/SPECAUG/cnn_tdnn_${affix}_sp/e${num_of_epoch}
+dir=exp/chain${nnet3_affix}/train_from_scratch/CNN_TDNN_1C/FSFAE3/DEFAULT/SPECAUG/cnn_tdnn_${affix}_sp/e${num_of_epoch}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp
@@ -280,7 +280,7 @@ if [ $stage -le 18 ]; then
     (
       data_affix=$(echo $data | sed s/test_//)
       nspk=$(wc -l <data/${data}_hires/spk2utt)
-      for lmtype in tgpr_5k tgpr; do
+      for lmtype in tgpr_5k bg; do
         steps/nnet3/decode.sh \
           --acwt 1.0 --post-decode-acwt 10.0 \
           --frames-per-chunk $frames_per_chunk \

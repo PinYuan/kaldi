@@ -367,7 +367,7 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=true
-num_of_epoch=6
+num_of_epoch=24
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.

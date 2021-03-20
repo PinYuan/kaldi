@@ -58,7 +58,7 @@ rescore=false # whether to rescore lattices
 dropout_schedule='0,0@0.20,0.2@0.50,0'
 
 # training options
-num_of_epoch=4
+num_of_epoch=16
 chunk_width=150
 chunk_left_context=40
 chunk_right_context=0

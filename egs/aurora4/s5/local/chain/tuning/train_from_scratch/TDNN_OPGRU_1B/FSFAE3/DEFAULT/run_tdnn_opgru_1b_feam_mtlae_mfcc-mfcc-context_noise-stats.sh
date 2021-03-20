@@ -58,7 +58,7 @@ rescore=false # whether to rescore lattices
 dropout_schedule='0,0@0.20,0.2@0.50,0'
 
 # training options
-num_of_epoch=4
+num_of_epoch=5
 chunk_width=150
 chunk_left_context=40
 chunk_right_context=0
@@ -106,7 +106,7 @@ target_set=train_si84_clean
 test_sets="test_A test_B test_C test_D"
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_OPGRU_1B/FSFAE3/DEFAULT/feam_mtlae_fbank-mfcc-context_noise-stats/${argu_desc}
+dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_OPGRU_1B/FSFAE3/DEFAULT/feam_mtlae_mfcc-mfcc-context_noise-stats/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 tree_dir=exp/chain${nnet3_affix}/tree_a_sp
@@ -193,7 +193,7 @@ if [ $stage -le 12 ]; then
   no-op-component name=context-acous input=Append(input@-2, input@-1, input@0, input@1, input@2)
   no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
   stats-layer name=stats-dspae config=mean+stddev(-900:1:1:900) input=prefinal-dspae
-  affine-layer name=lda input=Append(dae-context, stats-dspae, context-acous, ReplaceIndex(ivector, t, 0))
+  affine-layer name=lda input=Append(context-dae, stats-dspae, context-acous, ReplaceIndex(ivector, t, 0))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn1-am dim=1024

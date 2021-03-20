@@ -26,11 +26,13 @@ set -e -o pipefail
 # (some of which are also used in this script directly).
 stage=15
 nj=30
+use_ihm_ali=false
 train_set=train_si84_multi
 target_set=train_si84_clean
 test_sets="test_A test_B test_C test_D"
 gmm=tri3b_multi  # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
+ihm_gmm=tri3b
 num_threads_ubm=32
 nnet3_affix=       # affix for exp dirs, e.g. it was _cleaned in tedlium.
 
@@ -50,12 +52,12 @@ chunk_width=140,100,160
 # training options
 srand=0
 remove_egs=true
-num_of_epoch=8
+num_of_epoch=24
 frame_weight_dae=0.04
 frame_weight_dspae=0.04
 initial_effective_lrate=0.0005
 final_effective_lrate=0.00005
-argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_stats-900.1.1.900_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_scale0.5_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -83,34 +85,43 @@ local/nnet3/run_ivector_common.sh \
   --num-threads-ubm $num_threads_ubm \
   --nnet3-affix "$nnet3_affix"
 
+if $use_ihm_ali; then
+  gmm_dir=exp/${ihm_gmm}
+  ali_dir=exp/${ihm_gmm}_ali_${train_set}_sp_ihmdata
+  lat_dir=exp/chain${nnet3_affix}/${ihm_gmm}_${train_set}_sp_lats_ihmdata
+  dir=exp/chain${nnet3_affix}/train_from_scratch/CNN_TDNN_1C/FSFAE3/DEFAULT/SPECAUG/ihmali_feam_mtlae_fbank-mfcc-t_noise-t_interpolation/${argu_desc}
+  lores_train_data_dir=data/${train_set}_ihmdata_sp
+  tree_dir=exp/chain${nnet3_affix}/tree_a_sp_ihmdata
+else
+  gmm_dir=exp/${gmm}
+  ali_dir=exp/${gmm}_ali_${train_set}_sp
+  lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
+  dir=exp/chain${nnet3_affix}/train_from_scratch/CNN_TDNN_1C/FSFAE3/DEFAULT/SPECAUG/feam_mtlae_fbank-mfcc-t_noise-t_interpolation/${argu_desc}
+  lores_train_data_dir=data/${train_set}_sp
+  tree_dir=exp/chain${nnet3_affix}/tree_a_sp
+fi
 
-
-gmm_dir=exp/${gmm}
-ali_dir=exp/${gmm}_ali_${train_set}_sp
-lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/CNN_TDNN_1C/FSFAE3/DEFAULT/feam_mtlae_mfcc-mfcc-context_noise-stats/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
-lores_train_data_dir=data/${train_set}_sp
 
 target_scp_dae=data/${target_set}_sp_hires/feats.target.scp
 target_scp_dspae=data/train_si84_noise_mismatch_sp_hires/feats.scp
 
-# note: you don't necessarily have to change the treedir name
-# each time you do a new experiment-- only if you change the
-# configuration in a way that affects the tree.
-tree_dir=exp/chain${nnet3_affix}/tree_a_sp
 # the 'lang' directory is created by this script.
 # If you create such a directory with a non-standard topology
 # you should probably name it differently.
 lang=data/lang_chain
+
+if [ ! -f $ali_dir/ali.1.gz ] && [ use_ihm_ali ]; then
+  steps/align_fmllr.sh --nj $nj --cmd "run.pl --mem 4G" \
+    data/${train_set}_ihmdata_sp data/lang exp/${ihm_gmm} exp/${ali_dir}
+fi
 
 for f in $train_data_dir/feats.scp $train_ivector_dir/ivector_online.scp \
     $lores_train_data_dir/feats.scp $gmm_dir/final.mdl \
     $ali_dir/ali.1.gz $gmm_dir/final.mdl; do
   [ ! -f $f ] && echo "$0: expected file $f to exist" && exit 1
 done
-
 
 if [ $stage -le 12 ]; then
   echo "$0: creating lang directory $lang with chain-type topology"
@@ -180,6 +191,10 @@ if [ $stage -le 15 ]; then
   input dim=100 name=ivector
   input dim=40 name=input
 
+  idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
+  batchnorm-component name=idct-batchnorm input=idct
+  spec-augment-layer name=spec-augment freq-max-proportion=0.5 time-zeroed-proportion=0.2 time-mask-max-frames=20
+
   # Denoise Autoencoder + deSpeech Autoencoder
   relu-renorm-layer name=tdnn1 dim=1024
 
@@ -205,16 +220,12 @@ if [ $stage -le 15 ]; then
   output name=output-dspae objective-type=quadratic input=prefinal-dspae
 
   # AM  
-  idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
-  batchnorm-component name=idct-batchnorm input=idct
-  
   linear-component name=ivector-linear $ivector_affine_opts dim=200 input=ReplaceIndex(ivector, t, 0)
   batchnorm-component name=ivector-batchnorm target-rms=0.025
 
-  no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
-  stats-layer name=stats-dspae config=mean+stddev(-900:1:1:900) input=prefinal-dspae
-  no-op-component name=info-dae-dspae input=Append(context-dae, stats-dspae)
-  combine-feature-maps-layer name=combine_inputs input=Append(idct-batchnorm, ivector-batchnorm, info-dae-dspae) num-filters1=1 num-filters2=5 num-filters3=5 height=40
+  no-op-component name=info-dae-dspae input=Append(prefinal-dae, prefinal-dspae)
+  batchnorm-component name=info-dae-dspae-batchnorm input=info-dae-dspae
+  combine-feature-maps-layer name=combine_inputs input=Append(Scale(0.5, spec-augment), ivector-batchnorm, Scale(0.5, info-dae-dspae-batchnorm)) num-filters1=1 num-filters2=5 num-filters3=2 height=40
 
   conv-relu-batchnorm-layer name=cnn1 $cnn_opts height-in=40 height-out=40 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=48 learning-rate-factor=0.333 max-change=0.25
   conv-relu-batchnorm-layer name=cnn2 $cnn_opts height-in=40 height-out=40 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=48

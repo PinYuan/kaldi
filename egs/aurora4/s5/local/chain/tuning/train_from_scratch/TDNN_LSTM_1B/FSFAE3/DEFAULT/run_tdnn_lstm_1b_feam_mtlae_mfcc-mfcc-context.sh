@@ -368,12 +368,12 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=true
-num_of_epoch=50
+num_of_epoch=6
 frame_weight_dae=0.04
 frame_weight_dspae=0.04
 initial_effective_lrate=0.0005
 final_effective_lrate=0.00005
-argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_stats-900.1.1.900_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -406,7 +406,7 @@ local/nnet3/run_ivector_common.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_LSTM_1B/FSFAE3/DEFAULT/SPECAUG/feam_mtlae_fbank-mfcc-context_noise-stats/${argu_desc}
+dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_LSTM_1B/FSFAE3/DEFAULT/feam_mtlae_mfcc-mfcc-context/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp
@@ -494,10 +494,6 @@ if [ $stage -le 15 ]; then
   input dim=100 name=ivector
   input dim=40 name=input
   
-  idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
-  batchnorm-component name=idct-batchnorm input=idct
-  spec-augment-layer name=spec-augment freq-max-proportion=0.5 time-zeroed-proportion=0.2 time-mask-max-frames=20
-
   # Denoise Autoencoder + deSpeech Autoencoder
   relu-renorm-layer name=tdnn1 dim=1024
 
@@ -523,10 +519,9 @@ if [ $stage -le 15 ]; then
   output name=output-dspae objective-type=quadratic input=prefinal-dspae
 
   # AM
-  no-op-component name=context-acous input=Append(spec-augment@-2, spec-augment@-1, spec-augment@0, spec-augment@1, spec-augment@2)
-  no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
-  stats-layer name=stats-dspae config=mean+stddev(-900:1:1:900) input=prefinal-dspae
-  affine-layer name=lda input=Append(context-dae, stats-dspae, context-acous, ReplaceIndex(ivector, t, 0))
+  no-op-component name=context-acous input=Append(input@-2, input@-1, input@0, input@1, input@2)
+  no-op-component name=context-dae input=Append(prefinal-dae@-2, prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1, prefinal-dae@2)
+  affine-layer name=lda input=Append(context-dae, context-acous, ReplaceIndex(ivector, t, 0))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn1-am $tdnn_opts dim=448
