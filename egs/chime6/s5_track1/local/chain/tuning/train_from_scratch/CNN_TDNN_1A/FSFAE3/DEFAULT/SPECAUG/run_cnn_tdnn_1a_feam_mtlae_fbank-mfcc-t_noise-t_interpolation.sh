@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
 
-# This factorized TDNN (TDNN-F) script is adapted from SWBD recipe 7q.
-# It uses resnet-style skip connections.
-# For details, refer to the paper:
-# "Semi-Orthogonal Low-Rank Matrix Factorization for Deep Neural Networks", Daniel Povey, Gaofeng Cheng, Yiming Wang, Ke Li, Hainan Xu, Mahsa Yarmohamadi, Sanjeev Khudanpur, Interspeech 2018
-#%WER 51.76 [ 30474 / 58881, 2665 ins, 11749 del, 16060 sub ] exp/chain_train_worn_simu_u400k_cleaned_rvb/tdnn1b_sp/decode_dev_gss_multiarray_2stage/wer_10_0.0
-
-# steps/info/chain_dir_info.pl exp/chain_train_worn_simu_u400k_cleaned_rvb/tdnn_1b_sp
-# exp/chain_train_worn_simu_u400k_cleaned_rvb/tdnn1b_sp/: num-iters=429 nj=3..16 num-params=17.0M dim=40+100->2776 combine=-0.134->-0.133 (over 3) xent:train/valid[285,428,final]=(-2.37,-1.95,-1.95/-2.19,-1.90,-1.91) logprob:train/valid[285,428,final]=(-0.201,-0.125,-0.124/-0.198,-0.147,-0.148)
+# https://github.com/kaldi-asr/kaldi/blob/master/egs/librispeech/s5/local/chain/tuning/run_cnn_tdnn_1a.sh
 
 set -e
 
 # configs for 'chain'
-stage=0
+stage=13
 nj=96
 train_set=train_worn_u400k
 test_sets="dev_worn dev_beamformit_ref"
@@ -28,17 +21,22 @@ train_stage=-10
 get_egs_stage=-10
 decode_iter=
 
-num_epochs=4
 common_egs_dir=
-# training options
 # training chunk-options
-chunk_width=140,100,160
+frames_per_eg=150,110,100
 xent_regularize=0.1
 dropout_schedule='0,0@0.20,0.5@0.50,0'
 
 # training options
+remove_egs=false
 srand=0
-remove_egs=true
+num_of_epoch=12
+frame_weight_dae=4e-2
+frame_weight_dspae=4e-2
+scale=5e-1
+initial_effective_lrate=1.5e-4
+final_effective_lrate=1.5e-5
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_scale${scale}_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -72,10 +70,13 @@ gmm_dir=exp/$gmm
 tree_dir=exp/chain${nnet3_affix}/tree_sp${tree_affix:+_$tree_affix}
 lang=data/lang_chain
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/tdnn${affix}_sp
+dir=exp/chain${nnet3_affix}/train_from_scratch/CNN_TDNN_1A/FSFAE3/DEFAULT/SPECAUG/feam_mtlae_fbank-mfcc-t_noise-t_interpolation/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
+
+target_scp_dae=data/${train_set}_dae_sp_hires/feats.scp
+target_scp_dspae=data/${train_set}_noise_mismatch_sp_hires/feats.scp
 
 for f in $gmm_dir/final.mdl $train_data_dir/feats.scp $train_ivector_dir/ivector_online.scp \
     $lores_train_data_dir/feats.scp; do
@@ -130,35 +131,71 @@ if [ $stage -le 12 ]; then
 fi
 
 if [ $stage -le 13 ]; then
-  mkdir -p $dir
   echo "$0: creating neural net configs using the xconfig parser";
 
-  num_targets=$(tree-info $tree_dir/tree |grep num-pdfs|awk '{print $2}')
-  learning_rate_factor=$(echo "print(0.5/$xent_regularize)" | python)
-  affine_opts="l2-regularize=0.01 dropout-proportion=0.0 dropout-per-dim=true dropout-per-dim-continuous=true"
-  tdnnf_opts="l2-regularize=0.01 dropout-proportion=0.0 bypass-scale=0.66"
-  linear_opts="l2-regularize=0.01 orthonormal-constraint=-1.0"
-  prefinal_opts="l2-regularize=0.01"
-  output_opts="l2-regularize=0.002"
+  num_targets=$(tree-info $tree_dir/tree | grep num-pdfs | awk '{print $2}')
+  learning_rate_factor=$(echo "print (0.5/$xent_regularize)" | python)
+  cnn_opts="l2-regularize=0.01"
+  ivector_affine_opts="l2-regularize=0.0"
+  affine_opts="l2-regularize=0.008 dropout-proportion=0.0 dropout-per-dim=true dropout-per-dim-continuous=true"
+  tdnnf_first_opts="l2-regularize=0.008 dropout-proportion=0.0 bypass-scale=0.0"
+  tdnnf_opts="l2-regularize=0.008 dropout-proportion=0.0 bypass-scale=0.75"
+  linear_opts="l2-regularize=0.008 orthonormal-constraint=-1.0"
+  prefinal_opts="l2-regularize=0.008"
+  output_opts="l2-regularize=0.005"
 
   mkdir -p $dir/configs
+
   cat <<EOF > $dir/configs/network.xconfig
   input dim=100 name=ivector
   input dim=40 name=input
 
-  # please note that it is important to have input layer with the name=input
-  # as the layer immediately preceding the fixed-affine-layer to enable
-  # the use of short notation for the descriptor
-  fixed-affine-layer name=lda input=Append(-1,0,1,ReplaceIndex(ivector, t, 0)) affine-transform-file=$dir/configs/lda.mat
+  # MFCC to filterbank
+  idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
+  batchnorm-component name=idct-batchnorm input=idct
+  spec-augment-layer name=spec-augment freq-max-proportion=0.5 time-zeroed-proportion=0.2 time-mask-max-frames=20
 
-  # the first splicing is moved before the lda layer, so no splicing here
-  relu-batchnorm-dropout-layer name=tdnn1 $affine_opts dim=1536
-  tdnnf-layer name=tdnnf2 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=1
-  tdnnf-layer name=tdnnf3 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=1
-  tdnnf-layer name=tdnnf4 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=1
-  tdnnf-layer name=tdnnf5 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=0
-  tdnnf-layer name=tdnnf6 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
-  tdnnf-layer name=tdnnf7 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
+  # Denoise Autoencoder + deSpeech Autoencoder
+  relu-renorm-layer name=tdnn1 dim=1024
+
+  relu-renorm-layer name=tdnn2-dae dim=256 input=tdnn1
+  relu-renorm-layer name=tdnn2-shared dim=768 input=tdnn1
+  relu-renorm-layer name=tdnn2-dspae dim=256 input=tdnn1
+
+  relu-renorm-layer name=tdnn3-dae dim=512 input=Append(tdnn2-dae, tdnn2-shared)
+  relu-renorm-layer name=tdnn3-shared dim=512 input=Append(tdnn2-dae, tdnn2-shared, tdnn2-dspae)
+  relu-renorm-layer name=tdnn3-dspae dim=512 input=Append(tdnn2-shared, tdnn2-dspae)
+
+  relu-renorm-layer name=tdnn4-dae dim=768 input=Append(tdnn3-dae, tdnn3-shared)
+  relu-renorm-layer name=tdnn4-shared dim=256 input=Append(tdnn3-dae, tdnn3-shared, tdnn3-dspae)
+  relu-renorm-layer name=tdnn4-dspae dim=768 input=Append(tdnn3-shared, tdnn3-dspae)
+
+  relu-renorm-layer name=tdnn5-dae dim=1024 input=Append(tdnn4-dae, tdnn4-shared)
+  relu-renorm-layer name=tdnn5-dspae dim=1024 input=Append(tdnn4-shared, tdnn4-dspae)
+
+  affine-layer name=prefinal-dae dim=40 input=tdnn5-dae
+  affine-layer name=prefinal-dspae dim=40 input=tdnn5-dspae
+
+  output name=output-dae objective-type=quadratic input=prefinal-dae
+  output name=output-dspae objective-type=quadratic input=prefinal-dspae
+
+  # AM
+  linear-component name=ivector-linear $ivector_affine_opts dim=200 input=ReplaceIndex(ivector, t, 0)
+  batchnorm-component name=ivector-batchnorm target-rms=0.025
+
+  no-op-component name=info-dae-dspae input=Append(prefinal-dae, prefinal-dspae)
+  batchnorm-component name=info-dae-dspae-batchnorm input=info-dae-dspae
+  combine-feature-maps-layer name=combine_inputs input=Append(Scale(0.5, spec-augment), ivector-batchnorm, Scale(0.5, info-dae-dspae-batchnorm)) num-filters1=1 num-filters2=5 num-filters3=2 height=40
+
+  conv-relu-batchnorm-layer name=cnn1 $cnn_opts height-in=40 height-out=40 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=64
+  conv-relu-batchnorm-layer name=cnn2 $cnn_opts height-in=40 height-out=40 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=64
+  conv-relu-batchnorm-layer name=cnn3 $cnn_opts height-in=40 height-out=20 height-subsample-out=2 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=128
+  conv-relu-batchnorm-layer name=cnn4 $cnn_opts height-in=20 height-out=20 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=128
+  conv-relu-batchnorm-layer name=cnn5 $cnn_opts height-in=20 height-out=10 height-subsample-out=2 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=256
+  conv-relu-batchnorm-layer name=cnn6 $cnn_opts height-in=10 height-out=10 time-offsets=-1,0,1 height-offsets=-1,0,1 num-filters-out=256
+
+  # the first TDNN-F layer has no bypass
+  tdnnf-layer name=tdnnf7 $tdnnf_first_opts dim=1536 bottleneck-dim=256 time-stride=0
   tdnnf-layer name=tdnnf8 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
   tdnnf-layer name=tdnnf9 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
   tdnnf-layer name=tdnnf10 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
@@ -167,6 +204,9 @@ if [ $stage -le 13 ]; then
   tdnnf-layer name=tdnnf13 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
   tdnnf-layer name=tdnnf14 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
   tdnnf-layer name=tdnnf15 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
+  tdnnf-layer name=tdnnf16 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
+  tdnnf-layer name=tdnnf17 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
+  tdnnf-layer name=tdnnf18 $tdnnf_opts dim=1536 bottleneck-dim=160 time-stride=3
   linear-component name=prefinal-l dim=256 $linear_opts
 
   prefinal-layer name=prefinal-chain input=prefinal-l $prefinal_opts big-dim=1536 small-dim=256
@@ -184,36 +224,37 @@ if [ $stage -le 14 ]; then
      /export/b0{3,4,5,6}/$USER/kaldi-data/egs/chime5-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/nnet3/chain/train.py --stage $train_stage \
-    --cmd "$train_cmd --mem 4G" \
-    --feat.online-ivector-dir=$train_ivector_dir \
+  steps/chain/train_mtlae.py --stage $train_stage \
+    --use-gpu "wait" \
+    --cmd "$decode_cmd" \
+    --feat.online-ivector-dir $train_ivector_dir \
     --feat.cmvn-opts "--norm-means=false --norm-vars=false" \
     --chain.xent-regularize $xent_regularize \
     --chain.leaky-hmm-coefficient 0.1 \
     --chain.l2-regularize 0.0 \
     --chain.apply-deriv-weights false \
     --chain.lm-opts="--num-extra-lm-states=2000" \
-    --trainer.dropout-schedule "$dropout_schedule" \
-    --trainer.add-option="--optimization.memory-compression-level=2" \
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
-    --egs.opts "--frames-overlap-per-eg 0" \
-    --egs.chunk-width $chunk_width \
-    --use-gpu=wait \
+    --egs.opts "--frames-overlap-per-eg 0 --constrained false" \
+    --egs.chunk-width $frames_per_eg \
+    --trainer.dropout-schedule $dropout_schedule \
+    --trainer.add-option="--optimization.memory-compression-level=2" \
     --trainer.num-chunk-per-minibatch 64 \
-    --trainer.frames-per-iter 1500000 \
-    --trainer.num-epochs $num_epochs \
+    --trainer.frames-per-iter 2500000 \
+    --trainer.num-epochs $num_of_epoch \
     --trainer.optimization.num-jobs-initial 3 \
     --trainer.optimization.num-jobs-final 16 \
-    --trainer.optimization.initial-effective-lrate 0.00025 \
-    --trainer.optimization.final-effective-lrate 0.000025 \
+    --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
+    --trainer.optimization.final-effective-lrate $final_effective_lrate \
     --trainer.max-param-change 2.0 \
     --cleanup.remove-egs $remove_egs \
-    --feat-dir=$train_data_dir \
-    --tree-dir=$tree_dir \
-    --lat-dir=$lat_dir \
+    --feat-dir $train_data_dir \
+    --tree-dir $tree_dir \
+    --lat-dir $lat_dir \
+    --target_scp_dae=$target_scp_dae \
+    --target_scp_dspae=$target_scp_dspae \
     --dir $dir  || exit 1;
-
 fi
 
 if [ $stage -le 15 ]; then

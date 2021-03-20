@@ -21,6 +21,10 @@ enhancement=gss        # for a new enhancement method,
 
 # training data
 train_set=train_worn_simu_u400k
+
+# exp dir
+dir=exp/chain_train_worn_simu_u400k_cleaned_rvb/tdnn1b_sp # default
+
 # End configuration section
 . ./utils/parse_options.sh
 
@@ -32,10 +36,10 @@ set -e # exit on error
 
 # chime5 main directory path
 # please change the path accordingly
-chime5_corpus=/export/corpora4/CHiME5
+chime5_corpus=/mnt/md0/Corpora/CHiME-5
 # chime6 data directories, which are generated from ${chime5_corpus},
 # to synchronize audio files across arrays and modify the annotation (JSON) file accordingly
-chime6_corpus=${PWD}/CHiME6
+chime6_corpus=/mnt/md0/Corpora/CHiME-6
 json_dir=${chime6_corpus}/transcriptions
 audio_dir=${chime6_corpus}/audio
 
@@ -208,8 +212,7 @@ if [ $stage -le 3 ]; then
   affix=1b   # affix for the TDNN directory name
   tree_affix=
   tree_dir=exp/chain${nnet3_affix}/tree_sp${tree_affix:+_$tree_affix}
-  dir=exp/chain${nnet3_affix}/tdnn${affix}_sp
-
+  
   # training options
   # training chunk-options
   chunk_width=140,100,160
@@ -223,7 +226,7 @@ if [ $stage -le 3 ]; then
 
   frames_per_chunk=$(echo $chunk_width | cut -d, -f1)
   rm $dir/.error 2>/dev/null || true
-
+  
   for data in $test_sets; do
     (
       local/nnet3/decode.sh --affix 2stage --pass2-decode-opts "--min-active 1000" \
@@ -232,7 +235,7 @@ if [ $stage -le 3 ]; then
         --ivector-dir exp/nnet3${nnet3_affix} \
         data/${data} data/lang${lm_suffix} \
         $tree_dir/graph${lm_suffix} \
-        exp/chain${nnet3_affix}/tdnn${affix}_sp
+        $dir
     ) || touch $dir/.error &
   done
   wait
@@ -248,6 +251,6 @@ if [ $stage -le 4 ]; then
   # please specify both dev and eval set directories so that the search parameters
   # (insertion penalty and language model weight) will be tuned using the dev set
   local/score_for_submit.sh --enhancement $enhancement --json $json_dir \
-      --dev exp/chain${nnet3_affix}/tdnn1b_sp/decode${lm_suffix}_dev_${enhancement}_2stage \
-      --eval exp/chain${nnet3_affix}/tdnn1b_sp/decode${lm_suffix}_eval_${enhancement}_2stage
+      --dev ${dir}/decode${lm_suffix}_dev_${enhancement}_2stage \
+      --eval ${dir}/decode${lm_suffix}_eval_${enhancement}_2stage
 fi
