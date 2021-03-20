@@ -91,7 +91,7 @@ if $use_ihm_ali; then
   lores_train_data_dir=data/$mic/${train_set}_ihmdata_sp_comb
   tree_dir=exp/$mic/chain${nnet3_affix}/tree_bi${tree_affix}_ihmdata
   lat_dir=exp/$mic/chain${nnet3_affix}/${gmm}_${train_set}_sp_comb_lats_ihmdata
-  dir=exp/$mic/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/feam_tdnn_mfcc-mfcc-context/${argu_desc}
+  dir=exp/$mic/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/feam_tdnn_mfcc-mfcc-context/${argu_desc}
   # note: the distinction between when we use the 'ihmdata' suffix versus
   # 'ihmali' is pretty arbitrary.
 else

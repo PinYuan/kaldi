@@ -86,6 +86,8 @@ local/nnet3/prepare_lores_feats.sh --stage $stage \
                                    --use-ihm-ali $use_ihm_ali \
                                    --train-set $train_set
 
+local/nnet3/prepare_hires_feats.sh --stage $stage
+
 if $use_ihm_ali; then
   gmm_dir=exp/ihm/${ihm_gmm}
   ali_dir=exp/${mic}/${ihm_gmm}_ali_${train_set}_sp_comb_ihmdata

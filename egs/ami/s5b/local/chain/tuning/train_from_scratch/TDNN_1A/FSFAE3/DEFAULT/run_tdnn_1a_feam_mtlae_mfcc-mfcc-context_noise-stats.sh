@@ -11,11 +11,11 @@
 # WER on eval                  40.6                  35.1
 # Final train prob             -0.196231             -0.114088
 # Final valid prob             -0.265572             -0.214282
-# Final train prob (xent)      -2.48061              -1.37987
+# Final train prob (xent)      -2.44061              -1.37987
 # Final valid prob (xent)      -2.71794              -1.8639
 
 # steps/info/chain_dir_info.pl exp/sdm1/chain_cleaned/tdnn1j_sp_bi_ihmali
-# exp/sdm1/chain_cleaned/tdnn1j_sp_bi_ihmali: num-iters=327 nj=2..12 num-params=34.3M dim=80+100->3728 combine=-0.126->-0.124 (over 4) xent:train/valid[217,326,final]=(-1.69,-1.43,-1.38/-2.06,-1.93,-1.86) logprob:train/valid[217,326,final]=(-0.143,-0.120,-0.114/-0.226,-0.218,-0.214)
+# exp/sdm1/chain_cleaned/tdnn1j_sp_bi_ihmali: num-iters=327 nj=2..12 num-params=34.3M dim=40+100->3728 combine=-0.126->-0.124 (over 4) xent:train/valid[217,326,final]=(-1.69,-1.43,-1.38/-2.06,-1.93,-1.86) logprob:train/valid[217,326,final]=(-0.143,-0.120,-0.114/-0.226,-0.218,-0.214)
 
 set -e -o pipefail
 # First the options that are passed through to run_ivector_common.sh
@@ -43,10 +43,12 @@ dropout_schedule='0,0@0.20,0.5@0.50,0'
 
 # training options
 srand=0
-num_of_epoch=15
+num_of_epoch=25
+frame_weight_dae=0.04
+frame_weight_dspae=0.04
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
-argu_desc="e${num_of_epoch}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_stats-900.1.1.900_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 
 # End configuration section.
@@ -84,13 +86,15 @@ local/nnet3/prepare_lores_feats.sh --stage $stage \
                                    --use-ihm-ali $use_ihm_ali \
                                    --train-set $train_set
 
+local/nnet3/prepare_lores_high_feats.sh --stage $stage
+
 if $use_ihm_ali; then
   gmm_dir=exp/ihm/${ihm_gmm}
   ali_dir=exp/${mic}/${ihm_gmm}_ali_${train_set}_sp_comb_ihmdata
   lores_train_data_dir=data/$mic/${train_set}_ihmdata_sp_comb
   tree_dir=exp/$mic/chain${nnet3_affix}/tree_bi${tree_affix}_ihmdata
   lat_dir=exp/$mic/chain${nnet3_affix}/${gmm}_${train_set}_sp_comb_lats_ihmdata
-  dir=exp/$mic/chain${nnet3_affix}/baseline/TDNN_1A/tdnn_${tdnn_affix}_sp_bi_ihmali/${argu_desc}
+  dir=exp/$mic/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/feam_mtlae_mfcc-mfcc-context_noise-stats/${argu_desc}
   # note: the distinction between when we use the 'ihmdata' suffix versus
   # 'ihmali' is pretty arbitrary.
 else
@@ -107,6 +111,8 @@ train_ivector_dir=exp/$mic/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires_40
 final_lm=`cat data/local/lm/final_lm`
 LM=$final_lm.pr1-7
 
+target_scp_dae=data/$mic/${train_set}_ihmdata_sp_hires_40_comb/feats.scp
+target_scp_dspae=data/$mic/${train_set}_noise_mismatch_sp_hires_40_comb/feats.scp
 
 for f in $gmm_dir/final.mdl $lores_train_data_dir/feats.scp \
    $train_data_dir/feats.scp $train_ivector_dir/ivector_online.scp; do
@@ -190,12 +196,39 @@ if [ $stage -le 15 ]; then
   input dim=100 name=ivector
   input dim=40 name=input
   
+  # Denoise Autoencoder + deSpeech Autoencoder
+  relu-renorm-layer name=tdnn1 dim=1024
+
+  relu-renorm-layer name=tdnn2-dae dim=256 input=tdnn1
+  relu-renorm-layer name=tdnn2-shared dim=768 input=tdnn1
+  relu-renorm-layer name=tdnn2-dspae dim=256 input=tdnn1
+
+  relu-renorm-layer name=tdnn3-dae dim=512 input=Append(tdnn2-dae, tdnn2-shared)
+  relu-renorm-layer name=tdnn3-shared dim=512 input=Append(tdnn2-dae, tdnn2-shared, tdnn2-dspae)
+  relu-renorm-layer name=tdnn3-dspae dim=512 input=Append(tdnn2-shared, tdnn2-dspae)
+
+  relu-renorm-layer name=tdnn4-dae dim=768 input=Append(tdnn3-dae, tdnn3-shared)
+  relu-renorm-layer name=tdnn4-shared dim=256 input=Append(tdnn3-dae, tdnn3-shared, tdnn3-dspae)
+  relu-renorm-layer name=tdnn4-dspae dim=768 input=Append(tdnn3-shared, tdnn3-dspae)
+
+  relu-renorm-layer name=tdnn5-dae dim=1024 input=Append(tdnn4-dae, tdnn4-shared)
+  relu-renorm-layer name=tdnn5-dspae dim=1024 input=Append(tdnn4-shared, tdnn4-dspae)
+
+  affine-layer name=prefinal-dae dim=40 input=tdnn5-dae
+  affine-layer name=prefinal-dspae dim=40 input=tdnn5-dspae
+
+  output name=output-dae objective-type=quadratic input=prefinal-dae
+  output name=output-dspae objective-type=quadratic input=prefinal-dspae
+
+  # AM
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
-  no-op-component name=input2 input=Append(delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
+  stats-layer name=stats-dspae config=mean+stddev(-900:1:1:900) input=prefinal-dspae
+  no-op-component name=input2 input=Append(context-dae, stats-dspae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
-  relu-batchnorm-layer name=tdnn1 $tdnn_opts dim=1024 input=input2
+  relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2
   tdnnf-layer name=tdnnf2 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=1
   tdnnf-layer name=tdnnf3 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=1
   tdnnf-layer name=tdnnf4 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=1
@@ -209,13 +242,12 @@ if [ $stage -le 15 ]; then
   tdnnf-layer name=tdnnf12 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
   tdnnf-layer name=tdnnf13 $tdnnf_opts dim=1024 bottleneck-dim=128 time-stride=3
   linear-component name=prefinal-l dim=192 $linear_opts
-
+  
   prefinal-layer name=prefinal-chain input=prefinal-l $prefinal_opts big-dim=1024 small-dim=192
   output-layer name=output include-log-softmax=false dim=$num_targets $output_opts
   
   prefinal-layer name=prefinal-xent input=prefinal-l $prefinal_opts big-dim=1024 small-dim=192
   output-layer name=output-xent dim=$num_targets learning-rate-factor=$learning_rate_factor $output_opts
-
 EOF
 
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
@@ -227,7 +259,7 @@ if [ $stage -le 16 ]; then
      /export/b0{5,6,7,8}/$USER/kaldi-data/egs/ami-$(date +'%m_%d_%H_%M')/s5b/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/nnet3/chain/train.py --stage $train_stage \
+  steps/chain/train_mtlae.py --stage $train_stage \
     --cmd "$decode_cmd" \
     --feat.online-ivector-dir $train_ivector_dir \
     --feat.cmvn-opts "--norm-means=false --norm-vars=false" \
@@ -238,6 +270,8 @@ if [ $stage -le 16 ]; then
     --chain.lm-opts="--num-extra-lm-states=2000" \
     --trainer.srand=$srand \
     --trainer.dropout-schedule $dropout_schedule \
+    --egs.frame-weight-dae=$frame_weight_dae \
+    --egs.frame-weight-dspae=$frame_weight_dspae \
     --egs.dir "$common_egs_dir" \
     --egs.opts "--frames-overlap-per-eg 0" \
     --egs.chunk-width 150 \
@@ -255,6 +289,8 @@ if [ $stage -le 16 ]; then
     --feat-dir $train_data_dir \
     --tree-dir $tree_dir \
     --lat-dir $lat_dir \
+    --target_scp_dae=$target_scp_dae \
+    --target_scp_dspae=$target_scp_dspae \
     --dir $dir
 fi
 

@@ -8,6 +8,7 @@ export LC_ALL=C
 LMBIN=$KALDI_ROOT/tools/irstlm/bin
 SRILM=$KALDI_ROOT/tools/srilm/bin/i686-m64
 BEAMFORMIT=$KALDI_ROOT/tools/BeamformIt
+ASCLITE=$KALDI_ROOT/tools/sctk/bin
 
-export PATH=$PATH:$LMBIN:$BEAMFORMIT:$SRILM
+export PATH=$PATH:$LMBIN:$BEAMFORMIT:$SRILM:$ASCLITE
 
