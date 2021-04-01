@@ -216,7 +216,7 @@ if [ $stage -le 14 ]; then
     --trainer.add-option="--optimization.memory-compression-level=2" \
     --trainer.num-chunk-per-minibatch 64 \
     --trainer.frames-per-iter 2500000 \
-    --trainer.num-epochs $num_epochs \
+    --trainer.num-epochs $num_of_epochs \
     --trainer.optimization.num-jobs-initial 3 \
     --trainer.optimization.num-jobs-final 16 \
     --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
