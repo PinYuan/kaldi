@@ -56,7 +56,7 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=false
-num_of_epoch=25
+num_of_epoch=35
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
 argu_desc="e${num_of_epoch}_il${initial_effective_lrate}_fl${final_effective_lrate}"

@@ -19,15 +19,16 @@ set -e -o pipefail
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=15
+stage=11
 nj=30
+use_ihm_ali=false
 train_set=train_si84_multi
 test_sets="test_eval92 test_0166 test_A test_B test_C test_D"
-test_sets="chien_denoised_test_eval92 chien_denoised_test_0166"
 test_sets="test_A test_B test_C test_D"
 
 gmm=tri3b_multi        # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
+ihm_gmm=tri3b
 
 num_threads_ubm=8
 
@@ -58,6 +59,9 @@ chunk_right_context=0
 srand=0
 remove_egs=false
 num_of_epoch=10
+initial_effective_lrate=0.01
+final_effective_lrate=0.001
+argu_desc="e${num_of_epoch}_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -89,22 +93,34 @@ local/nnet3/run_ivector_common.sh \
   --num-threads-extractor $num_threads_extractor \
   --nnet3-affix "$nnet3_affix"
 
-gmm_dir=exp/${gmm}
-ali_dir=exp/${gmm}_ali_${train_set}_sp
-lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/baseline/tdnn_${affix}_sp/e${num_of_epoch}
+if $use_ihm_ali; then
+  gmm_dir=exp/${ihm_gmm}
+  ali_dir=exp/${ihm_gmm}_ali_${train_set}_sp_ihmdata
+  lat_dir=exp/chain${nnet3_affix}/${ihm_gmm}_${train_set}_sp_lats_ihmdata
+  dir=exp/chain${nnet3_affix}/baseline/tdnn_${affix}_sp_ihmali/${argu_desc}
+  lores_train_data_dir=data/${train_set}_ihmdata_sp
+  tree_dir=exp/chain${nnet3_affix}/tree_a_sp_ihmdata
+else
+  gmm_dir=exp/${gmm}
+  ali_dir=exp/${gmm}_ali_${train_set}_sp
+  lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
+  dir=exp/chain${nnet3_affix}/baseline/tdnn_${affix}_sp/${argu_desc}
+  lores_train_data_dir=data/${train_set}_sp
+  tree_dir=exp/chain${nnet3_affix}/tree_a_sp
+fi
+
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
-lores_train_data_dir=data/${train_set}_sp
-
-# note: you don't necessarily have to change the treedir name
-# each time you do a new experiment-- only if you change the
-# configuration in a way that affects the tree.
-tree_dir=exp/chain${nnet3_affix}/tree_a_sp
+  
 # the 'lang' directory is created by this script.
 # If you create such a directory with a non-standard topology
 # you should probably name it differently.
 lang=data/lang_chain
+
+if [ ! -f $ali_dir/ali.1.gz ] && [ use_ihm_ali ]; then
+  steps/align_fmllr.sh --nj $nj --cmd "run.pl --mem 4G" \
+    data/${train_set}_ihmdata_sp data/lang exp/${ihm_gmm} exp/${ali_dir}
+fi
 
 for f in $train_data_dir/feats.scp $train_ivector_dir/ivector_online.scp \
     $lores_train_data_dir/feats.scp $gmm_dir/final.mdl \

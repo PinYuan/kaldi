@@ -20,11 +20,11 @@ set -e -o pipefail
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=15
+stage=12
 nj=30
 train_set=train_si84_multi
 target_set=train_si84_clean
-test_sets="test_A test_B test_C test_D"
+test_sets="test_A test_B test_C test_D dev_0330a"
 gmm=tri3b_multi        # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
 
@@ -61,7 +61,7 @@ frame_weight_dae=0.04
 frame_weight_dspae=0.04
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
-argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_scale0.1-0.3-0.6_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -97,10 +97,9 @@ local/nnet3/run_ivector_common_feam.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/tdnn_1a_feam_mtlae_mfcc-mfcc-context_noise-u-sad/${argu_desc}
+dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/tdnn_1a_feam_mtlae_mfcc-mfcc-context_noise-context_interpolation/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
-train_nivector_dir=my_data/ni_vector/sad/nivectors_${train_set}_sp_hires/conf_1.0
 lores_train_data_dir=data/${train_set}_sp
 
 target_scp_dae=data/${target_set}_sp_hires/feats.target.scp
@@ -185,7 +184,7 @@ if [ $stage -le 12 ]; then
 
   mkdir -p $dir/configs
   cat <<EOF > $dir/configs/network.xconfig
-  input dim=180 name=ivector
+  input dim=100 name=ivector
   input dim=40 name=input
   
   # Denoise Autoencoder + deSpeech Autoencoder
@@ -216,7 +215,8 @@ if [ $stage -le 12 ]; then
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
   no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
-  no-op-component name=input2 input=Append(context-dae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  no-op-component name=context-dspae input=Append(prefinal-dspae@-1, prefinal-dspae@0, prefinal-dspae@1)
+  no-op-component name=input2 input=Append(Scale(0.1, context-dae), Scale(0.3, context-dspae), Scale(0.6, delta), Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2
@@ -252,14 +252,13 @@ if [ $stage -le 13 ]; then
 
   steps/chain/train_mtlae.py --stage=$train_stage \
     --cmd="$train_cmd" \
-    --feat.online-ivector-dir=$train_nivector_dir \
+    --feat.online-ivector-dir=$train_ivector_dir \
     --feat.cmvn-opts="--norm-means=false --norm-vars=false" \
     --chain.xent-regularize $xent_regularize \
     --chain.leaky-hmm-coefficient=0.1 \
     --chain.l2-regularize=0.0 \
     --chain.apply-deriv-weights=false \
     --chain.lm-opts="--num-extra-lm-states=2000" \
-    --chain.length-tolerance=100000 \
     --trainer.dropout-schedule $dropout_schedule \
     --trainer.add-option="--optimization.memory-compression-level=2" \
     --trainer.srand=$srand \
@@ -315,7 +314,7 @@ if [ $stage -le 15 ]; then
     (
       data_affix=$(echo $data | sed s/test_//)
       nspk=$(wc -l <data/${data}_hires/spk2utt)
-      for lmtype in tgpr_5k bg; do
+      for lmtype in tgpr_5k; do
         steps/nnet3/decode.sh \
           --acwt 1.0 --post-decode-acwt 10.0 \
           --extra-left-context 0 --extra-right-context 0 \
@@ -323,8 +322,7 @@ if [ $stage -le 15 ]; then
           --extra-right-context-final 0 \
           --frames-per-chunk $frames_per_chunk \
           --nj $nspk --cmd "$decode_cmd"  --num-threads 4 \
-          --hack-nvector true \
-          --online-ivector-dir my_data/ni_vector/sad/nivectors_${data}_hires/conf_1.0 \
+          --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${data}_hires \
           $tree_dir/graph_${lmtype} data/${data}_hires ${dir}/decode_${lmtype}_${data_affix} || exit 1
       done
 

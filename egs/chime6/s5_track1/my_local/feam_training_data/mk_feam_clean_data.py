@@ -39,7 +39,7 @@ with open(f"{train_dir}/utt2spk", "r") as file:
 #       沒有變動
 
 rid_set = set()
-cmd_fmt = "sox /mnt/md0/Corpora/CHiME-6/audio/train/{0}.wav -t wav - remix {1} | sox -t wav - -t wav - speed {2} | sox --vol {3} -t wav - -t wav - |"
+cmd_fmt = "sox /mnt/HDD/dataset/CHiME-6/audio/train/{0}.wav -t wav - remix {1} | sox -t wav - -t wav - speed {2} | sox --vol {3} -t wav - -t wav - |"
 
 with open(f"{dest_dir}/wav.scp", "w") as wavscp_file, \
     open(f"{dest_dir}/segments", "w") as segments_file, \

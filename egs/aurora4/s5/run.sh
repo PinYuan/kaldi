@@ -10,7 +10,7 @@ test_sets="eval92 0166"
 train=true   # set to false to disable the training-related scripts
              # note: you probably only want to set --train false if you
              # are using at least --stage 1.
-decode=true  # set to false to disable the decoding-related scripts.
+decode=false  # set to false to disable the decoding-related scripts.
 
 . utils/parse_options.sh
 
@@ -18,10 +18,10 @@ decode=true  # set to false to disable the decoding-related scripts.
 #aurora4 directory in CLSP server: /export/corpora5/AURORA
 
 #aurora4=/mnt/spdb/aurora4
-aurora4=/export/corpora5/AURORA
+aurora4=/mnt/HDD/dataset/Aurora4/4A
 #we need lm, trans, from WSJ0 CORPUS
 #wsj0=/mnt/spdb/wall_street_journal
-wsj0=/export/corpora5/LDC/LDC93S6B
+wsj0=/mnt/HDD/dataset/WSJ/WSJ0
 
 if [ $stage -le 0 ]; then
   local/aurora4_data_prep.sh $aurora4 $wsj0
@@ -41,8 +41,8 @@ if [ $stage -le 3 ]; then
   # Now make MFCC features.
   # mfccdir should be some place with a largish disk where you
   # want to store MFCC features.
-  for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_1206; do 
-   steps/make_mfcc.sh  --nj 10 \
+  for x in train_si84_clean train_si84_multi test_eval92 test_0166 dev_0330 dev_0330a dev_1206 test_A test_B test_C test_D; do 
+   steps/make_mfcc.sh  --nj 20 \
      data/$x exp/make_mfcc/$x $mfccdir || exit 1;
    steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x $mfccdir || exit 1;
   done
@@ -58,7 +58,7 @@ if [ $stage -le 4 ]; then
   # for normal setups.  It doesn't always help. [it's to discourage non-silence
   # models from modeling silence.]
   if $train; then
-    steps/train_mono.sh --boost-silence 1.25 --nj 10 --cmd "$train_cmd" \
+    steps/train_mono.sh --boost-silence 1.25 --nj 20 --cmd "$train_cmd" \
       data/train_si84_${train_set} data/lang exp/mono0a${model_affix} || exit 1;
   fi
 
@@ -74,7 +74,7 @@ fi
 if [ $stage -le 5 ]; then
   # tri1
   if $train; then
-    steps/align_si.sh --boost-silence 1.25 --nj 10 --cmd "$train_cmd" \
+    steps/align_si.sh --boost-silence 1.25 --nj 20 --cmd "$train_cmd" \
        data/train_si84_${train_set} data/lang exp/mono0a${model_affix} exp/mono0a${model_affix}_ali || exit 1;
 
     steps/train_deltas.sh --boost-silence 1.25 --cmd "$train_cmd" \
@@ -85,13 +85,13 @@ fi
 if [ $stage -le 6 ]; then
   # tri2
   if $train; then 
-    steps/align_si.sh --nj 10 --cmd "$train_cmd" \
+    steps/align_si.sh --nj 20 --cmd "$train_cmd" \
       data/train_si84_${train_set} data/lang exp/tri1${model_affix} exp/tri1${model_affix}_ali_si84 || exit 1;
 
     steps/train_deltas.sh --cmd "$train_cmd" 2500 15000 \
       data/train_si84_${train_set} data/lang exp/tri1${model_affix}_ali_si84 exp/tri2a${model_affix} || exit 1;
 
-    steps/align_si.sh --nj 10 --cmd "$train_cmd" \
+    steps/align_si.sh --nj 20 --cmd "$train_cmd" \
       data/train_si84_${train_set} data/lang exp/tri2a${model_affix} exp/tri2a${model_affix}_ali_si84 || exit 1;
     
     steps/train_lda_mllt.sh --cmd "$train_cmd" \
@@ -113,7 +113,7 @@ if [ $stage -le 7 ]; then
 
   # Align tri2b system with all the si84 data.
   if $train; then
-    steps/align_si.sh  --nj 10 --cmd "$train_cmd" --use-graphs true \
+    steps/align_si.sh  --nj 20 --cmd "$train_cmd" --use-graphs true \
       data/train_si84_${train_set} data/lang exp/tri2b${model_affix} exp/tri2b${model_affix}_ali_si84  || exit 1;
     
     steps/train_sat.sh --cmd "$train_cmd" 4200 40000 \

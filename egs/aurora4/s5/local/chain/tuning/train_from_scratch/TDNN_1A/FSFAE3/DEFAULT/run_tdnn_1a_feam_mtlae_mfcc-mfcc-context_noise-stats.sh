@@ -61,7 +61,7 @@ frame_weight_dae=0.04
 frame_weight_dspae=0.04
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
-argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_stats-900.1.1.900_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_stats-10.1.1.10_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -215,7 +215,7 @@ if [ $stage -le 12 ]; then
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
   no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
-  stats-layer name=stats-dspae config=mean+stddev(-900:1:1:900) input=prefinal-dspae
+  stats-layer name=stats-dspae config=mean+stddev(-10:1:1:10) input=prefinal-dspae
   no-op-component name=input2 input=Append(context-dae, stats-dspae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here

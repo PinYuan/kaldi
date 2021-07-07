@@ -56,10 +56,10 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=false
-num_of_epoch=20
+num_of_epoch=15
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
-argu_desc="e${num_of_epoch}_f${frame_weight}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -183,9 +183,16 @@ if [ $stage -le 12 ]; then
   input dim=100 name=ivector
   input dim=120 name=input
   
-  idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
+  dim-range-component name=clean input=input dim=40 dim-offset=0
+  dim-range-component name=noise input=input dim=40 dim-offset=40
+  dim-range-component name=origin input=input dim=40 dim-offset=80
+
+  no-op-component name=context-clean input=Append(clean@-1, clean@0, clean@1)
+  no-op-component name=context-noise input=Append(noise@-1, noise@0, noise@1)
+  idct-layer name=idct input=origin dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
-  no-op-component name=input2 input=Append(delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+    
+  no-op-component name=input2 input=Append(context-clean, context-noise, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
 
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2

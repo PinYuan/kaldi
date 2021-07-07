@@ -20,13 +20,15 @@ set -e -o pipefail
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=12
+stage=15
 nj=30
+use_ihm_ali=false
 train_set=train_si84_multi
 target_set=train_si84_clean
-test_sets="test_A test_B test_C test_D"
+test_sets="test_A" #"test_A test_B test_C test_D"
 gmm=tri3b_multi        # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
+ihm_gmm=tri3b
 
 num_threads_ubm=8
 
@@ -94,32 +96,43 @@ local/nnet3/run_ivector_common_feam.sh \
   --num-threads-extractor $num_threads_extractor \
   --nnet3-affix "$nnet3_affix"
 
-gmm_dir=exp/${gmm}
-ali_dir=exp/${gmm}_ali_${train_set}_sp
-lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/SPECAUG/tdnn_1a_feam_mtlae_fbank-mfcc-context_noise-stats/${argu_desc}
+if $use_ihm_ali; then
+  gmm_dir=exp/${ihm_gmm}
+  ali_dir=exp/${ihm_gmm}_ali_${train_set}_sp_ihmdata
+  lat_dir=exp/chain${nnet3_affix}/${ihm_gmm}_${train_set}_sp_lats_ihmdata
+  dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/SPECAUG/tdnn_1a_ihmali_feam_mtlae_fbank-mfcc-context_noise-stats/${argu_desc}
+  lores_train_data_dir=data/${train_set}_ihmdata_sp
+  tree_dir=exp/chain${nnet3_affix}/tree_a_sp_ihmdata
+else
+  gmm_dir=exp/${gmm}
+  ali_dir=exp/${gmm}_ali_${train_set}_sp
+  lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
+  dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/SPECAUG/tdnn_1a_feam_mtlae_fbank-mfcc-context_noise-stats/${argu_desc}
+  lores_train_data_dir=data/${train_set}_sp
+  tree_dir=exp/chain${nnet3_affix}/tree_a_sp
+fi
+
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
-lores_train_data_dir=data/${train_set}_sp
 
 target_scp_dae=data/${target_set}_sp_hires/feats.target.scp
 target_scp_dspae=data/train_si84_noise_mismatch_sp_hires/feats.scp
 
-# note: you don't necessarily have to change the treedir name
-# each time you do a new experiment-- only if you change the
-# configuration in a way that affects the tree.
-tree_dir=exp/chain${nnet3_affix}/tree_a_sp
 # the 'lang' directory is created by this script.
 # If you create such a directory with a non-standard topology
 # you should probably name it differently.
 lang=data/lang_chain
+
+if [ ! -f $ali_dir/ali.1.gz ] && [ use_ihm_ali ]; then
+  steps/align_fmllr.sh --nj $nj --cmd "run.pl --mem 4G" \
+    data/${train_set}_ihmdata_sp data/lang exp/${ihm_gmm} exp/${ali_dir}
+fi
 
 for f in $train_data_dir/feats.scp $train_ivector_dir/ivector_online.scp \
     $lores_train_data_dir/feats.scp $gmm_dir/final.mdl \
     $ali_dir/ali.1.gz $gmm_dir/final.mdl; do
   [ ! -f $f ] && echo "$0: expected file $f to exist" && exit 1
 done
-
 
 if [ $stage -le 9 ]; then
   echo "$0: creating lang directory $lang with chain-type topology"
@@ -252,7 +265,7 @@ if [ $stage -le 13 ]; then
      /export/b0{3,4,5,6}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/chain/train_mtlae.py --stage=101 \
+  steps/chain/train_mtlae.py --stage=$train_stage \
     --cmd="$train_cmd" \
     --feat.online-ivector-dir=$train_ivector_dir \
     --feat.cmvn-opts="--norm-means=false --norm-vars=false" \

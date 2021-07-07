@@ -24,7 +24,7 @@ stage=12
 nj=30
 train_set=train_si84_multi
 target_set=train_si84_clean
-test_sets="test_A test_B test_C test_D dev_0330a"
+test_sets="test_A test_B test_C test_D"
 gmm=tri3b_multi        # this is the source gmm-dir that we'll use for alignments; it
                  # should have alignments for the specified training data.
 
@@ -61,7 +61,7 @@ frame_weight_dae=0.04
 frame_weight_dspae=0.04
 initial_effective_lrate=0.01
 final_effective_lrate=0.001
-argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_scale0.55_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -97,7 +97,7 @@ local/nnet3/run_ivector_common_feam.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/tdnn_1a_feam_mtlae_mfcc-mfcc-context_noise-attention-2/${argu_desc}
+dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/tdnn_1a_feam_mtlae_mfcc-mfcc-context_interpolation/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp
@@ -170,6 +170,7 @@ fi
 
 if [ $stage -le 12 ]; then
   mkdir -p $dir
+  rm -rf $dir/log
   
   echo "$0: creating neural net configs using the xconfig parser";
 
@@ -209,13 +210,12 @@ if [ $stage -le 12 ]; then
 
   output name=output-dae objective-type=quadratic input=prefinal-dae
   output name=output-dspae objective-type=quadratic input=prefinal-dspae
-  
+
   # AM
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
   no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
-  attention-relu-renorm-layer name=attention-dspae input=prefinal-dspae time-stride=3 num-heads=2 value-dim=40 key-dim=20 num-left-inputs=5 num-right-inputs=2
-  no-op-component name=input2 input=Append(context-dae, attention-dspae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  no-op-component name=input2 input=Append(Scale(0.55, context-dae), Scale(0.45, delta), Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2
@@ -278,7 +278,7 @@ if [ $stage -le 13 ]; then
     --egs.dir="$common_egs_dir" \
     --egs.opts="--frames-overlap-per-eg 0" \
     --cleanup.remove-egs=$remove_egs \
-    --cleanup.preserve-model-interval 5 \
+    --cleanup.preserve-model-interval=5 \
     --use-gpu=wait \
     --reporting.email="$reporting_email" \
     --feat-dir=$train_data_dir \
@@ -313,7 +313,7 @@ if [ $stage -le 15 ]; then
     (
       data_affix=$(echo $data | sed s/test_//)
       nspk=$(wc -l <data/${data}_hires/spk2utt)
-      for lmtype in tgpr_5k; do
+      for lmtype in tgpr_5k bg; do
         steps/nnet3/decode.sh \
           --acwt 1.0 --post-decode-acwt 10.0 \
           --extra-left-context 0 --extra-right-context 0 \

@@ -59,9 +59,9 @@ remove_egs=false
 num_of_epoch=20
 frame_weight_dae=0.04
 frame_weight_dspae=0.04
-initial_effective_lrate=0.01
-final_effective_lrate=0.001
-argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_il${initial_effective_lrate}_fl${final_effective_lrate}"
+initial_effective_lrate=0.0005
+final_effective_lrate=0.00005
+argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_att-1.1.40.40.5.2_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
 test_online_decoding=false  # if true, it will run the last decoding stage.
@@ -97,7 +97,7 @@ local/nnet3/run_ivector_common_feam.sh \
 gmm_dir=exp/${gmm}
 ali_dir=exp/${gmm}_ali_${train_set}_sp
 lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
-dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/tdnn_1a_feam_mtlae_mfcc-mfcc-context_noise-attention-5/${argu_desc}
+dir=exp/chain${nnet3_affix}/train_from_scratch/TDNN_1A/FSFAE3/DEFAULT/tdnn_1a_feam_mtlae_mfcc-mfcc-context_noise-attention/${argu_desc}
 train_data_dir=data/${train_set}_sp_hires
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 lores_train_data_dir=data/${train_set}_sp
@@ -214,7 +214,7 @@ if [ $stage -le 12 ]; then
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
   no-op-component name=context-dae input=Append(prefinal-dae@-1, prefinal-dae@0, prefinal-dae@1)
-  attention-relu-renorm-layer name=attention-dspae input=prefinal-dspae time-stride=3 num-heads=5 value-dim=40 key-dim=20 num-left-inputs=5 num-right-inputs=2
+  attention-relu-renorm-layer name=attention-dspae input=prefinal-dspae time-stride=1 num-heads=1 value-dim=40 key-dim=40 num-left-inputs=5 num-right-inputs=2
   no-op-component name=input2 input=Append(context-dae, attention-dspae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
@@ -249,7 +249,7 @@ if [ $stage -le 13 ]; then
      /export/b0{3,4,5,6}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
-  steps/chain/train_mtlae.py --stage=45 \
+  steps/chain/train_mtlae.py --stage=$train_stage \
     --cmd="$train_cmd" \
     --feat.online-ivector-dir=$train_ivector_dir \
     --feat.cmvn-opts="--norm-means=false --norm-vars=false" \

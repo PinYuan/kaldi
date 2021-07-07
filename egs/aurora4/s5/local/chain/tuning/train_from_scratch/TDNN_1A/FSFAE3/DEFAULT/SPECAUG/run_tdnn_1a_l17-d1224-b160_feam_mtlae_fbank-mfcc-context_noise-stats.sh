@@ -56,7 +56,7 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=false
-num_of_epoch=50
+num_of_epoch=60
 frame_weight_dae=0.04
 frame_weight_dspae=0.04
 initial_effective_lrate=0.01

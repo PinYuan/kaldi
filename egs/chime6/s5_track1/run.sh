@@ -9,14 +9,14 @@
 # Begin configuration section.
 nj=96
 decode_nj=20
-stage=0
-nnet_stage=-10
+stage=15
+nnet_stage=13 #-10
 decode_stage=1
 decode_only=false
 num_data_reps=4
 foreground_snrs="20:10:15:5:0"
 background_snrs="20:10:15:5:0"
-enhancement=beamformit # gss or beamformit
+enhancement=gss # gss or beamformit
 
 # End configuration section
 . ./utils/parse_options.sh
@@ -32,10 +32,10 @@ set -e # exit on error
 
 # chime5 main directory path
 # please change the path accordingly
-chime5_corpus=/export/corpora4/CHiME5
+chime5_corpus=/mnt/HDD/dataset/CHiME-5
 # chime6 data directories, which are generated from ${chime5_corpus},
 # to synchronize audio files across arrays and modify the annotation (JSON) file accordingly
-chime6_corpus=${PWD}/CHiME6
+chime6_corpus=/mnt/HDD/dataset/CHiME-6
 json_dir=${chime6_corpus}/transcriptions
 audio_dir=${chime6_corpus}/audio
 
@@ -248,6 +248,7 @@ fi
 if [ $stage -le 14 ]; then
   # The following script cleans the data and produces cleaned data
   steps/cleanup/clean_and_segment_data.sh --nj ${nj} --cmd "$train_cmd" \
+    --stage 2 \
     --segmentation-opts "--min-segment-length 0.3 --min-new-segment-length 0.6" \
     data/${train_set} data/lang exp/tri3 exp/tri3_cleaned data/${train_set}_cleaned
 fi

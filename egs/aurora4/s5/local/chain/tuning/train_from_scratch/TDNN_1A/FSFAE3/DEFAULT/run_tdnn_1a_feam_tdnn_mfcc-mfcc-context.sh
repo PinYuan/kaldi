@@ -56,10 +56,10 @@ chunk_right_context=0
 # training options
 srand=0
 remove_egs=false
-num_of_epoch=20
+num_of_epoch=30
 frame_weight=0.04
-initial_effective_lrate=0.01
-final_effective_lrate=0.001
+initial_effective_lrate=0.0005
+final_effective_lrate=0.00005
 argu_desc="e${num_of_epoch}_f${frame_weight}_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options
@@ -191,8 +191,8 @@ if [ $stage -le 12 ]; then
   relu-renorm-layer name=tdnn2 dim=1024 input=Append(-1,2)
   relu-renorm-layer name=tdnn3 dim=1024 input=Append(-3,3)
   relu-renorm-layer name=tdnn4 dim=1024 input=Append(-7,2)
-  affine-layer name=prefinal-ae dim=40
-  output name=output_ae objective-type=quadratic input=prefinal-ae
+  affine-layer name=prefinal-dae dim=40
+  output name=output_ae objective-type=quadratic input=prefinal-dae
 
   # AM
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat

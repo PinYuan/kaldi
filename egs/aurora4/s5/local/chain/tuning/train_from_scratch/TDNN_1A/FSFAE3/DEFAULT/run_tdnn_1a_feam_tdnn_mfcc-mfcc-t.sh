@@ -198,8 +198,8 @@ if [ $stage -le 12 ]; then
   # AM
   idct-layer name=idct input=input dim=40 cepstral-lifter=22 affine-transform-file=$dir/configs/idct.mat
   delta-layer name=delta input=idct
-  no-op-component name=dae-t input=prefinal-dae
-  no-op-component name=input2 input=Append(dae-t, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
+  no-op-component name=t-dae input=prefinal-dae
+  no-op-component name=input2 input=Append(t-dae, delta, Scale(1.0, ReplaceIndex(ivector, t, 0)))
   
   # the first splicing is moved before the lda layer, so no splicing here
   relu-batchnorm-layer name=tdnn7 $tdnn_opts dim=1024 input=input2

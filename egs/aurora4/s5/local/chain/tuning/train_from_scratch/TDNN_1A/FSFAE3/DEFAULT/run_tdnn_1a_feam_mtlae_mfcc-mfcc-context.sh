@@ -59,8 +59,8 @@ remove_egs=false
 num_of_epoch=20
 frame_weight_dae=0.04
 frame_weight_dspae=0.04
-initial_effective_lrate=0.01
-final_effective_lrate=0.001
+initial_effective_lrate=0.0005
+final_effective_lrate=0.00005
 argu_desc="e${num_of_epoch}_fdae${frame_weight_dae}_fdspae${frame_weight_dspae}_il${initial_effective_lrate}_fl${final_effective_lrate}"
 
 #decode options

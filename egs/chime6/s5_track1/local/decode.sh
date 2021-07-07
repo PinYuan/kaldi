@@ -36,10 +36,10 @@ set -e # exit on error
 
 # chime5 main directory path
 # please change the path accordingly
-chime5_corpus=/mnt/md0/Corpora/CHiME-5
+chime5_corpus=/mnt/HDD/dataset/CHiME-5
 # chime6 data directories, which are generated from ${chime5_corpus},
 # to synchronize audio files across arrays and modify the annotation (JSON) file accordingly
-chime6_corpus=/mnt/md0/Corpora/CHiME-6
+chime6_corpus=/mnt/HDD/dataset/CHiME-6
 json_dir=${chime6_corpus}/transcriptions
 audio_dir=${chime6_corpus}/audio
 
